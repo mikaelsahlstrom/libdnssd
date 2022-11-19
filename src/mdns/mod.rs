@@ -1,6 +1,6 @@
 extern crate socket2;
 
-use std::{ net::{ IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr }, io::Read, time::Duration };
+use std::{ net::{ IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr }, io::Read };
 use socket2::{ Socket, Domain, Type, Protocol, SockAddr };
 
 use crate::debug;
@@ -34,7 +34,6 @@ pub fn listen(ip_version: IpVersion)
 
     socket.set_reuse_address(true).unwrap();
     socket.set_reuse_port(true).unwrap();
-    socket.set_read_timeout(Some(Duration::from_millis(3000))).unwrap();
 
     match addr.ip()
     {
@@ -66,7 +65,7 @@ pub fn listen(ip_version: IpVersion)
             },
             Err(e) =>
             {
-                    println!("{}", e);
+                println!("{}", e);
             }
         }
     }
