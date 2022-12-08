@@ -2,7 +2,10 @@
 extern crate lazy_static;
 
 use std::thread;
+use std::process;
+
 use clap::Parser;
+use ansi_term::Color::Red;
 
 mod debug;
 mod mdns;
@@ -19,26 +22,51 @@ fn main()
 {
     let args = Args::parse();
 
-    if args.ip_version == "v4"
+    let mut mdns_listener = if args.ip_version == "v4"
     {
-        let mdns_handle = thread::spawn(move ||
+        match mdns::MDnsListener::new(mdns::IpVersion::IPV4)
         {
-            mdns::listen(mdns::IpVersion::IPV4);
-        });
-
-        mdns_handle.join().unwrap();
+            Ok(l) => l,
+            Err(e) =>
+            {
+                println!("{} {}", Red.bold().paint("ERROR:"), e);
+                process::exit(1);
+            }
+        }
     }
     else if args.ip_version == "v6"
     {
-        let mdns_handle = thread::spawn(move ||
+        match mdns::MDnsListener::new(mdns::IpVersion::IPV6)
         {
-            mdns::listen(mdns::IpVersion::IPV6);
-        });
-
-        mdns_handle.join().unwrap();
+            Ok(l) => l,
+            Err(e) =>
+            {
+                println!("{} {}", Red.bold().paint("ERROR:"), e);
+                process::exit(1);
+            }
+        }
     }
     else
     {
         println!("Unknown IP version. Supported: v4, v6.");
-    }
+        process::exit(1);
+    };
+
+    let mdns_handle = thread::spawn(move ||
+    {
+        loop
+        {
+            match mdns_listener.recv_packet()
+            {
+                Ok(()) => (),
+                Err(e) =>
+                {
+                    println!("Error: {}", e);
+                    break;
+                }
+            }
+        }
+    });
+
+    mdns_handle.join().unwrap();
 }

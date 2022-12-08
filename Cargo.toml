@@ -3,11 +3,11 @@ name = "libdnssd"
 version = "0.1.0"
 edition = "2021"
 authors = ["Mikael Sahlström <mick.sahlstrom@gmail.com>"]
-definition = "Library for DNS SD."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 socket2 = { version = "0.4.7", features = ["all"] }
 lazy_static = "1.4.0"
-clap = { version = "4.0.23", features = ["derive"] }
+clap = { version = "4.0.29", features = ["derive"] }
+ansi_term = "0.12.1"
