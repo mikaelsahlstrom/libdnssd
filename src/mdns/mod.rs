@@ -17,7 +17,7 @@ pub enum IpVersion
 pub struct MDnsListener
 {
     socket: UdpSocket,
-    buffer: [u8; 9000],
+    buffer: [u8; 4096],
 }
 
 impl MDnsListener
@@ -30,7 +30,7 @@ impl MDnsListener
             IpVersion::IPV4 => join_multicast(&MULTICAST_IPV4_SOCKET)
         }?;
 
-        let buffer = [0u8; 9000];
+        let buffer = [0u8; 4096];
 
         Ok(Self
         {

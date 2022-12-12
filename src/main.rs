@@ -61,7 +61,7 @@ fn main()
                 Ok(()) => (),
                 Err(e) =>
                 {
-                    println!("Error: {}", e);
+                    println!("{} {}", Red.bold().paint("ERROR:"), e);
                     break;
                 }
             }

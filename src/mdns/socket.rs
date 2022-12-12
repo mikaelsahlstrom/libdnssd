@@ -2,6 +2,7 @@ extern crate socket2;
 
 use std::{ net::{ IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket }, io };
 use socket2::{ Socket, Domain, Type, SockAddr, Protocol };
+use default_net;
 
 const MULTICAST_PORT: u16 = 5353;
 const MULTICAST_ADDR_IPV4: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
@@ -33,6 +34,17 @@ fn create_socket(addr: &SocketAddr) -> io::Result<Socket>
     Ok(socket)
 }
 
+fn get_default_ipv6_interface() -> u32
+{
+    let default_interface = match default_net::get_default_interface()
+    {
+        Ok(interface) => interface.index,
+        Err(_) => 0
+    };
+
+    default_interface
+}
+
 pub fn join_multicast(addr: &SocketAddr) -> io::Result<UdpSocket>
 {
     let ip_addr = addr.ip();
@@ -46,7 +58,7 @@ pub fn join_multicast(addr: &SocketAddr) -> io::Result<UdpSocket>
         },
         IpAddr::V6(ref mdns_v6) =>
         {
-            socket.join_multicast_v6(mdns_v6, 0)?;
+            socket.join_multicast_v6(mdns_v6, get_default_ipv6_interface())?;
             socket.set_only_v6(true)?;
         }
     };
