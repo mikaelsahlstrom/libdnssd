@@ -4,6 +4,7 @@ use crate::debug;
 
 mod socket;
 mod mdns_error;
+mod dns;
 
 use mdns_error::MdnsError;
 use socket::{ join_multicast, MULTICAST_IPV4_SOCKET, MULTICAST_IPV6_SOCKET };
@@ -43,6 +44,7 @@ impl MDnsListener
     {
         let (count, addr) = self.socket.recv_from(&mut self.buffer)?;
         println!("From {}\n{}\n", addr, debug::Hex::new(&self.buffer, count));
+        let header = dns::MdnsHeader::from(self.buffer, count);
         Ok(())
     }
 }

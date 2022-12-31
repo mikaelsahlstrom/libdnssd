@@ -39,7 +39,7 @@ fn get_default_ipv6_interface() -> u32
     let default_interface = match default_net::get_default_interface()
     {
         Ok(interface) => interface.index,
-        Err(_) => 0
+        Err(_) => 0 // TODO: Improve error handling.
     };
 
     default_interface

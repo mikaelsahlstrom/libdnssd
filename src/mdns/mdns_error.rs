@@ -1,9 +1,17 @@
-use std::{error::Error, fmt::Display};
+use std::{error::Error, fmt::Display, array::TryFromSliceError};
+
+#[derive(Debug)]
+pub enum MdnsParsingErrorType
+{
+    HeaderToShort
+}
 
 #[derive(Debug)]
 pub enum MdnsError
 {
-    UdpSocketError(std::io::Error)
+    UdpSocketError(std::io::Error),
+    Ipv6DefaultInterfaceError,
+    MdnsParsingError(MdnsParsingErrorType)
 }
 
 impl Error for MdnsError
@@ -18,6 +26,20 @@ impl Display for MdnsError
             MdnsError::UdpSocketError(err) =>
             {
                 write!(f, "mDNS UDP socket error: {}", err)
+            },
+            MdnsError::Ipv6DefaultInterfaceError =>
+            {
+                write!(f, "mDNS socket error: Could not get default IPv6 interface")
+            },
+            MdnsError::MdnsParsingError(err) =>
+            {
+                match err
+                {
+                    MdnsParsingErrorType::HeaderToShort =>
+                    {
+                        write!(f, "mDNS parsing error: header to short")
+                    }
+                }
             }
         }
     }
