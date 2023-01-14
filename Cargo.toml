@@ -9,6 +9,6 @@ authors = ["Mikael Sahlström <mick.sahlstrom@gmail.com>"]
 [dependencies]
 socket2 = { version = "0.4.7", features = ["all"] }
 lazy_static = "1.4.0"
-clap = { version = "4.0.32", features = ["derive"] }
+clap = { version = "4.1.1", features = ["derive"] }
 ansi_term = "0.12.1"
 default-net = "0.12.0"
