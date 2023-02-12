@@ -1,9 +1,12 @@
-use std::{error::Error, fmt::Display, array::TryFromSliceError};
+use std::{error::Error, fmt::Display };
 
 #[derive(Debug)]
 pub enum MdnsParsingErrorType
 {
-    HeaderToShort
+    HeaderToShort,
+    LabelToLong,
+    LabelCompressionLoop,
+    OutOfBuffer
 }
 
 #[derive(Debug)]
@@ -38,6 +41,18 @@ impl Display for MdnsError
                     MdnsParsingErrorType::HeaderToShort =>
                     {
                         write!(f, "mDNS parsing error: header to short")
+                    },
+                    MdnsParsingErrorType::LabelToLong =>
+                    {
+                        write!(f, "mDNS parsing error: Label to short")
+                    },
+                    MdnsParsingErrorType::LabelCompressionLoop =>
+                    {
+                        write!(f, "mDNS parsing error: Label compression loop")
+                    },
+                    MdnsParsingErrorType::OutOfBuffer =>
+                    {
+                        write!(f, "mDNS parsing error: Out of buffer")
                     }
                 }
             }
