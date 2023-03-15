@@ -7,8 +7,8 @@ authors = ["Mikael Sahlström <mick.sahlstrom@gmail.com>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-socket2 = { version = "0.4.7", features = ["all"] }
+socket2 = { version = "0.5.1", features = ["all"] }
 lazy_static = "1.4.0"
-clap = { version = "4.1.6", features = ["derive"] }
+clap = { version = "4.1.8", features = ["derive"] }
 ansi_term = "0.12.1"
-default-net = "0.12.0"
+default-net = "0.13.1"
