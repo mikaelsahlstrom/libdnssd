@@ -6,7 +6,10 @@ pub enum MdnsParsingErrorType
     HeaderToShort,
     LabelToLong,
     LabelCompressionLoop,
-    OutOfBuffer
+    OutOfBuffer,
+    Reserved,
+    Uft8ParsingFailed,
+    LabelPtrForward
 }
 
 #[derive(Debug)]
@@ -40,7 +43,7 @@ impl Display for MdnsError
                 {
                     MdnsParsingErrorType::HeaderToShort =>
                     {
-                        write!(f, "mDNS parsing error: header to short")
+                        write!(f, "mDNS parsing error: Header to short")
                     },
                     MdnsParsingErrorType::LabelToLong =>
                     {
@@ -53,6 +56,18 @@ impl Display for MdnsError
                     MdnsParsingErrorType::OutOfBuffer =>
                     {
                         write!(f, "mDNS parsing error: Out of buffer")
+                    },
+                    MdnsParsingErrorType::Reserved =>
+                    {
+                        write!(f, "mDNS parsing error: Reserved bytes")
+                    },
+                    MdnsParsingErrorType::Uft8ParsingFailed =>
+                    {
+                        write!(f, "mDNS parsing error: UTF-8 parsing failed")
+                    },
+                    MdnsParsingErrorType::LabelPtrForward =>
+                    {
+                        write!(f, "mDNS parsing error: Forward label pointer")
                     }
                 }
             }
