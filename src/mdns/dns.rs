@@ -167,8 +167,8 @@ impl MdnsHeader
             for i in 0..header.answers_len
             {
                 // Get answer and add to header.
+                println!("answer label: {}", MdnsHeader::name_to_string(buffer, 12)?);
             }
-            // println!("test: {}", MdnsHeader::name_to_string(buffer, 13));
         }
 
         Ok(header)
