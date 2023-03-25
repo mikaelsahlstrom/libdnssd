@@ -8,23 +8,21 @@ const FLAGS_QR_RESPONSE: u16 = 0x8000;
 const MAX_COMPRESSION_POINTERS: u8 = 126;
 const MAX_LABEL_OCTETS: u8 = 255;
 
-pub struct MdnsAnswer {}
-
-pub struct MdnsResponse
+pub struct Mdns
 {
-    answers: Vec<MdnsAnswer>,
+    header: MdnsHeader,
+    queries: Vec<Query>,
+    answers: Vec<Answer>
 }
 
-pub struct MdnsHeader
+struct MdnsHeader
 {
     id: u16, // 0x0000
     answer: bool,
     queries_len: u16,
     answers_len: u16,
     authorities_len: u16,
-    additional_len: u16,
-    queries: Vec<Query>,
-    answers: Vec<Answer>,
+    additional_len: u16
 }
 
 enum Types
@@ -59,7 +57,34 @@ struct Answer
 
 impl MdnsHeader
 {
-    fn name_to_string(buffer: [u8; 4096], pos: usize) -> Result<String, mdns_error::MdnsError>
+    fn from(buffer: [u8; 4096], len: usize) -> Result<MdnsHeader, mdns_error::MdnsError>
+    {
+        if len < 12
+        {
+            return Err(mdns_error::MdnsError::MdnsParsingError(
+                mdns_error::MdnsParsingErrorType::HeaderToShort,
+            ));
+        }
+
+        let flags = u16::from_be_bytes([buffer[2], buffer[3]]);
+
+        let header = MdnsHeader
+        {
+            id: u16::from_be_bytes([buffer[0], buffer[1]]),
+            answer: flags & FLAGS_QR_MASK == FLAGS_QR_RESPONSE,
+            queries_len: u16::from_be_bytes([buffer[4], buffer[5]]),
+            answers_len: u16::from_be_bytes([buffer[6], buffer[7]]),
+            authorities_len: u16::from_be_bytes([buffer[8], buffer[9]]),
+            additional_len: u16::from_be_bytes([buffer[10], buffer[11]])
+        };
+
+        Ok(header)
+    }
+}
+
+impl Mdns
+{
+    fn label_to_string(buffer: [u8; 4096], pos: usize) -> Result<String, mdns_error::MdnsError>
     {
         let mut name = String::new();
         let mut offset = pos;
@@ -132,28 +157,9 @@ impl MdnsHeader
         return Ok(name);
     }
 
-    pub fn from(buffer: [u8; 4096], len: usize) -> Result<MdnsHeader, mdns_error::MdnsError>
+    pub fn from(buffer: [u8; 4096], len: usize) -> Result<Mdns, mdns_error::MdnsError>
     {
-        if len < 12
-        {
-            return Err(mdns_error::MdnsError::MdnsParsingError(
-                mdns_error::MdnsParsingErrorType::HeaderToShort,
-            ));
-        }
-
-        let flags = u16::from_be_bytes([buffer[2], buffer[3]]);
-
-        let header = MdnsHeader
-        {
-            id: u16::from_be_bytes([buffer[0], buffer[1]]),
-            answer: flags & FLAGS_QR_MASK == FLAGS_QR_RESPONSE,
-            queries_len: u16::from_be_bytes([buffer[4], buffer[5]]),
-            answers_len: u16::from_be_bytes([buffer[6], buffer[7]]),
-            authorities_len: u16::from_be_bytes([buffer[8], buffer[9]]),
-            additional_len: u16::from_be_bytes([buffer[10], buffer[11]]),
-            queries: Vec::new(),
-            answers: Vec::new(),
-        };
+        let header = MdnsHeader::from(buffer, len)?;
 
         if !header.answer && header.queries_len > 0
         {
@@ -167,13 +173,21 @@ impl MdnsHeader
             for i in 0..header.answers_len
             {
                 // Get answer and add to header.
-                println!("answer label: {}", MdnsHeader::name_to_string(buffer, 12)?);
+                println!("answer label: {}", Mdns::label_to_string(buffer, 12)?);
             }
         }
 
-        Ok(header)
+        return Ok(
+            Mdns
+            {
+                header: header,
+                queries: Vec::new(),
+                answers: Vec::new()
+            }
+        );
     }
 }
+
 
 #[cfg(test)]
 mod tests
@@ -196,7 +210,7 @@ mod tests
         }
 
         assert_eq!(
-            MdnsHeader::name_to_string(buffer, 0).unwrap(),
+            Mdns::label_to_string(buffer, 0).unwrap(),
             "_hap._tcp.local"
         );
     }
@@ -217,7 +231,7 @@ mod tests
         }
 
         assert_eq!(
-            MdnsHeader::name_to_string(buffer, 0).unwrap(),
+            Mdns::label_to_string(buffer, 0).unwrap(),
             "_companion-link._tcp.local"
         );
     }
@@ -253,7 +267,7 @@ mod tests
         }
 
         assert_eq!(
-            MdnsHeader::name_to_string(buffer, 50).unwrap(),
+            Mdns::label_to_string(buffer, 50).unwrap(),
             "DIRIGERA._hap._tcp.local"
         );
     }
@@ -287,7 +301,7 @@ mod tests
         }
 
         assert_eq!(
-            MdnsHeader::name_to_string(buffer, 39).unwrap(),
+            Mdns::label_to_string(buffer, 39).unwrap(),
             "DIRIGERA._hap._tcp.local"
         )
     }

@@ -43,8 +43,8 @@ impl MDnsListener
     pub fn recv_packet(&mut self) -> Result<(), MdnsError>
     {
         let (count, addr) = self.socket.recv_from(&mut self.buffer)?;
-        println!("From {}\n{}\n", addr, debug::Hex::new(&self.buffer, count));
-        let header = dns::MdnsHeader::from(self.buffer, count);
+        println!("\nFrom {}", addr);
+        let mdns_packet = dns::Mdns::from(self.buffer, count);
         Ok(())
     }
 }
