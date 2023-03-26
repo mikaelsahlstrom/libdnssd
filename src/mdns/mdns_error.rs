@@ -9,7 +9,9 @@ pub enum MdnsParsingErrorType
     OutOfBuffer,
     Reserved,
     Uft8ParsingFailed,
-    LabelPtrForward
+    LabelPtrForward,
+    UnknownRrType,
+    UnknownRrClass
 }
 
 #[derive(Debug)]
@@ -68,6 +70,14 @@ impl Display for MdnsError
                     MdnsParsingErrorType::LabelPtrForward =>
                     {
                         write!(f, "mDNS parsing error: Forward label pointer")
+                    },
+                    MdnsParsingErrorType::UnknownRrType =>
+                    {
+                        write!(f, "mDNS parsing error: Unknown resource record type")
+                    },
+                    MdnsParsingErrorType::UnknownRrClass =>
+                    {
+                        write!(f, "mDNS parsing error: Unknown resource record class")
                     }
                 }
             }

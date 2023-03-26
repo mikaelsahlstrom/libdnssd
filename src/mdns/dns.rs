@@ -31,24 +31,43 @@ struct MdnsHeader
 
 enum Types
 {
-    A = 0x1,     // IPv4 address associated with domain
-    AAAA = 0x1c, // IPv6 address associated with domain
-    PTR = 0xc2,  // Domains associated with IP address
-    TXT = 0x10,  // Text strings
-    SRV = 0x21,  // Service record
-    ANY = 0xff
+    A = 0x0001,     // IPv4 address associated with domain
+    AAAA = 0x001c,  // IPv6 address associated with domain
+    PTR = 0x000c,   // Domains associated with IP address
+    TXT = 0x0010,   // Text strings
+    SRV = 0x0021,   // Service record
+    ANY = 0x00ff
 }
 
 struct ResourceRecord
 {
     name: String,
-    query_type: Types,
+    rr_type: Types,
     class: u16,
     ttl: u32,
     data_len: u16,
     data: Vec<u8>,
     // Keep track of offset used.
     offset: usize
+}
+
+impl TryFrom<[u8; 2]> for Types
+{
+    type Error = ();
+
+    fn try_from(value: [u8; 2]) -> Result<Self, Self::Error>
+    {
+        match u16::from_be_bytes(value)
+        {
+            0x0001 => Ok(Types::A),
+            0x001c => Ok(Types::AAAA),
+            0x000c => Ok(Types::PTR),
+            0x0010 => Ok(Types::TXT),
+            0x0021 => Ok(Types::SRV),
+            0x00ff => Ok(Types::ANY),
+            _ => Err(())
+        }
+    }
 }
 
 impl MdnsHeader
@@ -181,6 +200,27 @@ impl ResourceRecord
     {
         self.name = self.label_to_string(buffer)?;
 
+        self.rr_type = match Types::try_from([buffer[self.offset], buffer[self.offset + 1]])
+        {
+            Ok(rr_type) => rr_type,
+            Err(_) =>
+            {
+                return Err(mdns_error::MdnsError::MdnsParsingError(mdns_error::MdnsParsingErrorType::UnknownRrType));
+            }
+        };
+        self.offset += 2;
+
+        let class = u16::from_be_bytes([buffer[self.offset], buffer[self.offset + 1]]);
+        if class != 0x0001
+        {
+            return Err(mdns_error::MdnsError::MdnsParsingError(mdns_error::MdnsParsingErrorType::UnknownRrClass));
+        }
+        self.class = class;
+        self.offset += 2;
+
+        self.ttl = u32::from_be_bytes([buffer[self.offset], buffer[self.offset + 1], buffer[self.offset + 2], buffer[self.offset + 3]]);
+        self.offset += 4;
+
         return Ok(());
     }
 
@@ -189,7 +229,7 @@ impl ResourceRecord
         ResourceRecord
         {
             name: String::new(),
-            query_type: Types::ANY,
+            rr_type: Types::ANY,
             class: 0,
             ttl: 0,
             data_len: 0,
@@ -203,15 +243,10 @@ impl Mdns
 {
     pub fn from(&mut self, buffer: [u8; 4096], len: usize) -> Result<(), mdns_error::MdnsError>
     {
-        self.header.from(buffer, len);
+        self.header.from(buffer, len)?;
 
         if !self.header.answer && self.header.queries_len > 0
         {
-            if self.header.queries_len > 0
-            {
-                println!("Queries:");
-            }
-
             // Parse queries.
             for _ in 0..self.header.queries_len
             {
@@ -221,15 +256,10 @@ impl Mdns
 
         if self.header.answer && self.header.answers_len > 0
         {
-            if self.header.answers_len > 0
-            {
-                println!("Answers:");
-            }
-
             // Parse answers.
             for _ in 0..self.header.answers_len
             {
-                // println!("{}", Mdns::label_to_string(buffer, 12)?);
+
             }
         }
 
