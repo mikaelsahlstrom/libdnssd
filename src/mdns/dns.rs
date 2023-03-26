@@ -304,7 +304,7 @@ mod tests
         }
 
         let mut rr = ResourceRecord::new();
-        rr.from(buffer).unwrap();
+        rr.name = rr.label_to_string(buffer).unwrap();
 
         assert_eq!(rr.name, "_hap._tcp.local");
         assert_eq!(rr.offset, 17);
@@ -326,7 +326,7 @@ mod tests
         }
 
         let mut rr = ResourceRecord::new();
-        rr.from(buffer).unwrap();
+        rr.name = rr.label_to_string(buffer).unwrap();
 
         assert_eq!(rr.name, "_companion-link._tcp.local");
         assert_eq!(rr.offset, 28);
@@ -362,7 +362,7 @@ mod tests
 
         let mut rr = ResourceRecord::new();
         rr.offset = 39;
-        rr.from(buffer).unwrap();
+        rr.name = rr.label_to_string(buffer).unwrap();
 
         assert_eq!(rr.name, "DIRIGERA._hap._tcp.local");
         assert_eq!(rr.offset, 50);
