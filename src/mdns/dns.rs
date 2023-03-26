@@ -11,8 +11,10 @@ const MAX_LABEL_OCTETS: u8 = 255;
 pub struct Mdns
 {
     header: MdnsHeader,
-    queries: Vec<Query>,
-    answers: Vec<Answer>
+    queries: Vec<ResourceRecord>,
+    answers: Vec<ResourceRecord>,
+    // Keep track of offset used.
+    offset: usize
 }
 
 struct MdnsHeader
@@ -22,7 +24,9 @@ struct MdnsHeader
     queries_len: u16,
     answers_len: u16,
     authorities_len: u16,
-    additional_len: u16
+    additional_len: u16,
+    // Keep track of offset used.
+    offset: usize
 }
 
 enum Types
@@ -32,10 +36,10 @@ enum Types
     PTR = 0xc2,  // Domains associated with IP address
     TXT = 0x10,  // Text strings
     SRV = 0x21,  // Service record
-    ANY = 0xff,
+    ANY = 0xff
 }
 
-struct Query
+struct ResourceRecord
 {
     name: String,
     query_type: Types,
@@ -43,21 +47,13 @@ struct Query
     ttl: u32,
     data_len: u16,
     data: Vec<u8>,
-}
-
-struct Answer
-{
-    name: String,
-    answer_type: Types,
-    class: u16,
-    ttl: u32,
-    data_len: u16,
-    data: Vec<u8>,
+    // Keep track of offset used.
+    offset: usize
 }
 
 impl MdnsHeader
 {
-    fn from(buffer: [u8; 4096], len: usize) -> Result<MdnsHeader, mdns_error::MdnsError>
+    fn from(&mut self, buffer: [u8; 4096], len: usize) -> Result<(), mdns_error::MdnsError>
     {
         if len < 12
         {
@@ -68,27 +64,40 @@ impl MdnsHeader
 
         let flags = u16::from_be_bytes([buffer[2], buffer[3]]);
 
-        let header = MdnsHeader
-        {
-            id: u16::from_be_bytes([buffer[0], buffer[1]]),
-            answer: flags & FLAGS_QR_MASK == FLAGS_QR_RESPONSE,
-            queries_len: u16::from_be_bytes([buffer[4], buffer[5]]),
-            answers_len: u16::from_be_bytes([buffer[6], buffer[7]]),
-            authorities_len: u16::from_be_bytes([buffer[8], buffer[9]]),
-            additional_len: u16::from_be_bytes([buffer[10], buffer[11]])
-        };
+        self.id = u16::from_be_bytes([buffer[0], buffer[1]]);
+        self.answer = flags & FLAGS_QR_MASK == FLAGS_QR_RESPONSE;
+        self.queries_len = u16::from_be_bytes([buffer[4], buffer[5]]);
+        self.answers_len = u16::from_be_bytes([buffer[6], buffer[7]]);
+        self.authorities_len = u16::from_be_bytes([buffer[8], buffer[9]]);
+        self.additional_len = u16::from_be_bytes([buffer[10], buffer[11]]);
+        self.offset = 13;
 
-        Ok(header)
+        Ok(())
+    }
+
+    fn new() -> MdnsHeader
+    {
+        MdnsHeader
+        {
+            id: 0,
+            answer: false,
+            queries_len: 0,
+            answers_len: 0,
+            authorities_len: 0,
+            additional_len: 0,
+            offset: 0
+        }
     }
 }
 
-impl Mdns
+impl ResourceRecord
 {
-    fn label_to_string(buffer: [u8; 4096], pos: usize) -> Result<String, mdns_error::MdnsError>
+    fn label_to_string(&mut self, buffer: [u8; 4096]) -> Result<String, mdns_error::MdnsError>
     {
         let mut name = String::new();
-        let mut offset = pos;
+        let mut offset = self.offset;
         let mut ptr_budget = MAX_COMPRESSION_POINTERS;
+        let mut ptr_taken = false;
 
         loop
         {
@@ -98,7 +107,12 @@ impl Mdns
                 {
                     if buffer[offset] == 0x00
                     {
-                        // End of name.
+                        // End of name, set offset to next thing.
+                        if !ptr_taken
+                        {
+                            self.offset = offset + 1;
+                        }
+
                         break;
                     }
 
@@ -145,6 +159,12 @@ impl Mdns
                         return Err(mdns_error::MdnsError::MdnsParsingError(mdns_error::MdnsParsingErrorType::LabelPtrForward));
                     }
 
+                    if !ptr_taken
+                    {
+                        self.offset = offset + 2;
+                        ptr_taken = true;
+                    }
+
                     offset = ptr;
                 },
                 _ =>
@@ -157,34 +177,78 @@ impl Mdns
         return Ok(name);
     }
 
-    pub fn from(buffer: [u8; 4096], len: usize) -> Result<Mdns, mdns_error::MdnsError>
+    fn from(&mut self, buffer: [u8; 4096]) -> Result<(), mdns_error::MdnsError>
     {
-        let header = MdnsHeader::from(buffer, len)?;
+        self.name = self.label_to_string(buffer)?;
 
-        if !header.answer && header.queries_len > 0
+        return Ok(());
+    }
+
+    fn new() -> ResourceRecord
+    {
+        ResourceRecord
         {
+            name: String::new(),
+            query_type: Types::ANY,
+            class: 0,
+            ttl: 0,
+            data_len: 0,
+            data: Vec::new(),
+            offset: 0
+        }
+    }
+}
+
+impl Mdns
+{
+    pub fn from(&mut self, buffer: [u8; 4096], len: usize) -> Result<(), mdns_error::MdnsError>
+    {
+        self.header.from(buffer, len);
+
+        if !self.header.answer && self.header.queries_len > 0
+        {
+            if self.header.queries_len > 0
+            {
+                println!("Queries:");
+            }
+
             // Parse queries.
+            for _ in 0..self.header.queries_len
+            {
 
+            }
         }
 
-        if header.answer && header.answers_len > 0
+        if self.header.answer && self.header.answers_len > 0
         {
-            // Parse answers.
-            for i in 0..header.answers_len
+            if self.header.answers_len > 0
             {
-                // Get answer and add to header.
-                println!("answer label: {}", Mdns::label_to_string(buffer, 12)?);
+                println!("Answers:");
+            }
+
+            // Parse answers.
+            for _ in 0..self.header.answers_len
+            {
+                // println!("{}", Mdns::label_to_string(buffer, 12)?);
             }
         }
 
-        return Ok(
-            Mdns
-            {
-                header: header,
-                queries: Vec::new(),
-                answers: Vec::new()
-            }
-        );
+        return Ok(());
+    }
+
+    pub fn new(buffer: [u8; 4096], len: usize) -> Result<Mdns, mdns_error::MdnsError>
+    {
+        let mut mdns = Mdns
+        {
+            header: MdnsHeader::new(),
+            queries: Vec::new(),
+            answers: Vec::new(),
+            offset: 0
+        };
+
+        mdns.from(buffer, len)?;
+
+        return Ok(mdns);
     }
 }
 
@@ -195,7 +259,7 @@ mod tests
     use super::*;
 
     #[test]
-    fn test_name_to_string_1()
+    fn test_label_to_string_1()
     {
         let mut buffer: [u8; 4096] = [0; 4096];
         let packet: [u8; 17] =
@@ -209,14 +273,15 @@ mod tests
             buffer[i] = packet[i];
         }
 
-        assert_eq!(
-            Mdns::label_to_string(buffer, 0).unwrap(),
-            "_hap._tcp.local"
-        );
+        let mut rr = ResourceRecord::new();
+        rr.from(buffer).unwrap();
+
+        assert_eq!(rr.name, "_hap._tcp.local");
+        assert_eq!(rr.offset, 17);
     }
 
     #[test]
-    fn test_name_to_string_2()
+    fn test_label_to_string_2()
     {
         let mut buffer: [u8; 4096] = [0; 4096];
         let packet: [u8; 28] =
@@ -230,50 +295,15 @@ mod tests
             buffer[i] = packet[i];
         }
 
-        assert_eq!(
-            Mdns::label_to_string(buffer, 0).unwrap(),
-            "_companion-link._tcp.local"
-        );
+        let mut rr = ResourceRecord::new();
+        rr.from(buffer).unwrap();
+
+        assert_eq!(rr.name, "_companion-link._tcp.local");
+        assert_eq!(rr.offset, 28);
     }
 
     #[test]
-    fn test_name_to_string_3()
-    {
-        let mut buffer: [u8; 4096] = [0; 4096];
-        let packet: [u8; 228] =
-        [
-            0x00, 0x00, 0x84, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x04, 0x5f,
-            0x68, 0x61, 0x70, 0x04, 0x5f, 0x74, 0x63, 0x70, 0x05, 0x6c, 0x6f, 0x63, 0x61, 0x6c,
-            0x00, 0x00, 0x0c, 0x00, 0x01, 0x00, 0x00, 0x11, 0x94, 0x00, 0x0b, 0x08, 0x44, 0x49,
-            0x52, 0x49, 0x47, 0x45, 0x52, 0x41, 0xc0, 0x0c, 0xc0, 0x27, 0x00, 0x10, 0x80, 0x01,
-            0x00, 0x00, 0x11, 0x94, 0x00, 0x65, 0x05, 0x63, 0x23, 0x3d, 0x31, 0x34, 0x04, 0x66,
-            0x66, 0x3d, 0x31, 0x14, 0x69, 0x64, 0x3d, 0x42, 0x35, 0x3a, 0x42, 0x30, 0x3a, 0x41,
-            0x30, 0x3a, 0x36, 0x37, 0x3a, 0x42, 0x34, 0x3a, 0x36, 0x39, 0x22, 0x6d, 0x64, 0x3d,
-            0x44, 0x49, 0x52, 0x49, 0x47, 0x45, 0x52, 0x41, 0x20, 0x48, 0x75, 0x62, 0x20, 0x66,
-            0x6f, 0x72, 0x20, 0x73, 0x6d, 0x61, 0x72, 0x74, 0x20, 0x70, 0x72, 0x6f, 0x64, 0x75,
-            0x63, 0x74, 0x73, 0x06, 0x70, 0x76, 0x3d, 0x31, 0x2e, 0x31, 0x04, 0x73, 0x23, 0x3d,
-            0x39, 0x04, 0x73, 0x66, 0x3d, 0x30, 0x04, 0x63, 0x69, 0x3d, 0x32, 0x0b, 0x73, 0x68,
-            0x3d, 0x6b, 0x37, 0x50, 0x76, 0x43, 0x67, 0x3d, 0x3d, 0xc0, 0x27, 0x00, 0x21, 0x80,
-            0x01, 0x00, 0x00, 0x00, 0x78, 0x00, 0x19, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x40, 0x10,
-            0x67, 0x77, 0x32, 0x2d, 0x38, 0x66, 0x66, 0x36, 0x65, 0x64, 0x32, 0x31, 0x30, 0x61,
-            0x34, 0x38, 0xc0, 0x16, 0xc0, 0xb5, 0x00, 0x1c, 0x80, 0x01, 0x00, 0x00, 0x00, 0x78,
-            0x00, 0x10, 0xfd, 0x05, 0x0b, 0x30, 0x32, 0x24, 0x4a, 0x5c, 0x6a, 0xec, 0x8a, 0xff,
-            0xfe, 0x00, 0xd0, 0xed,
-        ];
-
-        for i in 0..packet.len()
-        {
-            buffer[i] = packet[i];
-        }
-
-        assert_eq!(
-            Mdns::label_to_string(buffer, 50).unwrap(),
-            "DIRIGERA._hap._tcp.local"
-        );
-    }
-
-    #[test]
-    fn test_name_to_string_4()
+    fn test_label_to_string_3()
     {
         let mut buffer: [u8; 4096] = [0; 4096];
         let packet: [u8; 229] =
@@ -300,9 +330,11 @@ mod tests
             buffer[i] = packet[i];
         }
 
-        assert_eq!(
-            Mdns::label_to_string(buffer, 39).unwrap(),
-            "DIRIGERA._hap._tcp.local"
-        )
+        let mut rr = ResourceRecord::new();
+        rr.offset = 39;
+        rr.from(buffer).unwrap();
+
+        assert_eq!(rr.name, "DIRIGERA._hap._tcp.local");
+        assert_eq!(rr.offset, 50);
     }
 }

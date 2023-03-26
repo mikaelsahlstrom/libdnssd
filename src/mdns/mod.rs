@@ -44,7 +44,7 @@ impl MDnsListener
     {
         let (count, addr) = self.socket.recv_from(&mut self.buffer)?;
         println!("\nFrom {}", addr);
-        let mdns_packet = dns::Mdns::from(self.buffer, count);
+        let mdns_packet = dns::Mdns::new(self.buffer, count)?;
         Ok(())
     }
 }
