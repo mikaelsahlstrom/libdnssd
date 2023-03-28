@@ -1,7 +1,5 @@
 use std::net::UdpSocket;
 
-use crate::debug;
-
 mod socket;
 mod mdns_error;
 mod dns;
