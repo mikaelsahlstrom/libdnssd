@@ -1,4 +1,5 @@
 use std::str;
+use std::net::{ Ipv4Addr, Ipv6Addr };
 
 use super::mdns_error;
 
@@ -31,11 +32,11 @@ struct MdnsHeader
 
 enum Types
 {
-    A = 0x0001,     // IPv4 address associated with domain
-    AAAA = 0x001c,  // IPv6 address associated with domain
-    PTR = 0x000c,   // Domains associated with IP address
-    TXT = 0x0010,   // Text strings
-    SRV = 0x0021,   // Service record
+    A = 0x0001,         // IPv4 address associated with domain
+    AAAA = 0x001c,      // IPv6 address associated with domain
+    PTR = 0x000c,       // Domains associated with IP address
+    TXT = 0x0010,       // Text strings
+    SRV = 0x0021,       // Service record
     ANY = 0x00ff
 }
 
@@ -220,6 +221,14 @@ impl ResourceRecord
 
         self.ttl = u32::from_be_bytes([buffer[self.offset], buffer[self.offset + 1], buffer[self.offset + 2], buffer[self.offset + 3]]);
         self.offset += 4;
+
+        self.data_len = u16::from_be_bytes([buffer[self.offset], buffer[self.offset + 1]]);
+        self.offset += 2;
+
+        for i in 0..self.data_len
+        {
+            self.data[i as usize] = buffer[self.offset + i as usize];
+        }
 
         return Ok(());
     }
