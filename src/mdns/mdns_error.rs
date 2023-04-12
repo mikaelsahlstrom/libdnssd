@@ -11,7 +11,9 @@ pub enum MdnsParsingErrorType
     Uft8ParsingFailed,
     LabelPtrForward,
     UnknownRrType,
-    UnknownRrClass
+    UnknownRrClass,
+    Ipv4AddrError,
+    TxtToLong
 }
 
 #[derive(Debug)]
@@ -49,7 +51,7 @@ impl Display for MdnsError
                     },
                     MdnsParsingErrorType::LabelToLong =>
                     {
-                        write!(f, "mDNS parsing error: Label to short")
+                        write!(f, "mDNS parsing error: Label to long")
                     },
                     MdnsParsingErrorType::LabelCompressionLoop =>
                     {
@@ -78,6 +80,14 @@ impl Display for MdnsError
                     MdnsParsingErrorType::UnknownRrClass =>
                     {
                         write!(f, "mDNS parsing error: Unknown resource record class")
+                    },
+                    MdnsParsingErrorType::Ipv4AddrError =>
+                    {
+                        write!(f, "mDNS parsing error: IPv4 address parsing error")
+                    },
+                    MdnsParsingErrorType::TxtToLong =>
+                    {
+                        write!(f, "mDNS parsing error: TXT field length to long")
                     }
                 }
             }

@@ -30,45 +30,71 @@ struct MdnsHeader
     offset: usize
 }
 
-enum Types
+enum ResourceRecord
 {
-    A = 0x0001,         // IPv4 address associated with domain
-    AAAA = 0x001c,      // IPv6 address associated with domain
-    PTR = 0x000c,       // Domains associated with IP address
-    TXT = 0x0010,       // Text strings
-    SRV = 0x0021,       // Service record
-    ANY = 0x00ff
+    A(ARecord),
+    AAAA(AAAARecord),
+    PTR(PTRRecord),
+    TXT(TXTRecord),
+    SRV(SRVRecord)
 }
 
-struct ResourceRecord
+struct ARecord
 {
     name: String,
-    rr_type: Types,
     class: u16,
     ttl: u32,
     data_len: u16,
-    data: Vec<u8>,
+    data: Ipv4Addr,
     // Keep track of offset used.
     offset: usize
 }
 
-impl TryFrom<[u8; 2]> for Types
+struct AAAARecord
 {
-    type Error = ();
+    name: String,
+    class: u16,
+    ttl: u32,
+    data_len: u16,
+    data: Ipv6Addr,
+    // Keep track of offset used.
+    offset: usize
+}
 
-    fn try_from(value: [u8; 2]) -> Result<Self, Self::Error>
-    {
-        match u16::from_be_bytes(value)
-        {
-            0x0001 => Ok(Types::A),
-            0x001c => Ok(Types::AAAA),
-            0x000c => Ok(Types::PTR),
-            0x0010 => Ok(Types::TXT),
-            0x0021 => Ok(Types::SRV),
-            0x00ff => Ok(Types::ANY),
-            _ => Err(())
-        }
-    }
+struct PTRRecord
+{
+    name: String,
+    class: u16,
+    ttl: u32,
+    data_len: u16,
+    data: String,
+    // Keep track of offset used.
+    offset: usize
+}
+
+struct TXTRecord
+{
+    name: String,
+    class: u16,
+    ttl: u32,
+    data_len: u16,
+    data: Vec<String>,
+    // Keep track of offset used.
+    offset: usize
+}
+
+struct SRVRecord
+{
+    name: String,
+    class: u16,
+    ttl: u32,
+    data_len: u16,
+    priority: u16,
+    weight: u16,
+    port: u16,
+    target: String,
+    // Keep track of offset used.
+    offset: usize
 }
 
 impl MdnsHeader
@@ -112,12 +138,13 @@ impl MdnsHeader
 
 impl ResourceRecord
 {
-    fn label_to_string(&mut self, buffer: [u8; 4096]) -> Result<String, mdns_error::MdnsError>
+    fn label_to_string(buffer: [u8; 4096], len: usize, start_offset: usize) -> Result<(String, usize), mdns_error::MdnsError>
     {
         let mut name = String::new();
-        let mut offset = self.offset;
+        let mut offset = start_offset;
         let mut ptr_budget = MAX_COMPRESSION_POINTERS;
         let mut ptr_taken = false;
+        let mut end_offset: usize = start_offset;
 
         loop
         {
@@ -130,7 +157,7 @@ impl ResourceRecord
                         // End of name, set offset to next thing.
                         if !ptr_taken
                         {
-                            self.offset = offset + 1;
+                            end_offset = offset + 1;
                         }
 
                         break;
@@ -154,7 +181,7 @@ impl ResourceRecord
                         Ok(s) => s,
                         Err(_) =>
                         {
-                            return Err(mdns_error::MdnsError::MdnsParsingError(mdns_error::MdnsParsingErrorType::LabelToLong));
+                            return Err(mdns_error::MdnsError::MdnsParsingError(mdns_error::MdnsParsingErrorType::Uft8ParsingFailed));
                         }
                     };
 
@@ -181,7 +208,7 @@ impl ResourceRecord
 
                     if !ptr_taken
                     {
-                        self.offset = offset + 2;
+                        end_offset = offset + 2;
                         ptr_taken = true;
                     }
 
@@ -194,57 +221,176 @@ impl ResourceRecord
             }
         }
 
-        return Ok(name);
+        return Ok((name, end_offset));
     }
 
-    fn from(&mut self, buffer: [u8; 4096]) -> Result<(), mdns_error::MdnsError>
+    fn parse_txt(buffer: [u8; 4096], len: usize, start_offset: usize, txt_length: usize) -> Result<(Vec<String>, usize), mdns_error::MdnsError>
     {
-        self.name = self.label_to_string(buffer)?;
+        let mut offset = start_offset;
+        let mut txts: Vec<String> = Vec::new();
 
-        self.rr_type = match Types::try_from([buffer[self.offset], buffer[self.offset + 1]])
+        if offset + txt_length > len
         {
-            Ok(rr_type) => rr_type,
-            Err(_) =>
-            {
-                return Err(mdns_error::MdnsError::MdnsParsingError(mdns_error::MdnsParsingErrorType::UnknownRrType));
-            }
-        };
-        self.offset += 2;
+            return Err(mdns_error::MdnsError::MdnsParsingError(mdns_error::MdnsParsingErrorType::TxtToLong));
+        }
 
-        let class = u16::from_be_bytes([buffer[self.offset], buffer[self.offset + 1]]);
+        while offset < start_offset + txt_length
+        {
+            let len = buffer[offset] as usize;
+            offset += 1;
+
+            let txt = match str::from_utf8(&buffer[offset..(offset + len)])
+            {
+                Ok(s) => s,
+                Err(_) =>
+                {
+                    return Err(mdns_error::MdnsError::MdnsParsingError(mdns_error::MdnsParsingErrorType::Uft8ParsingFailed));
+                }
+            };
+            offset += len;
+
+            txts.push(txt.to_string());
+        }
+
+        return Ok((txts, offset));
+    }
+
+    fn new_from(buffer: [u8; 4096], len: usize, offset: usize) -> Result<ResourceRecord, mdns_error::MdnsError>
+    {
+        let (name, mut next_offset) = ResourceRecord::label_to_string(buffer, len, offset)?;
+        let rr_type = u16::from_be_bytes([buffer[next_offset], buffer[next_offset + 1]]);
+        next_offset += 2;
+
+        let class = u16::from_be_bytes([buffer[next_offset + 3], buffer[next_offset + 4]]);
         if class != 0x0001
         {
             return Err(mdns_error::MdnsError::MdnsParsingError(mdns_error::MdnsParsingErrorType::UnknownRrClass));
         }
-        self.class = class;
-        self.offset += 2;
+        next_offset += 2;
 
-        self.ttl = u32::from_be_bytes([buffer[self.offset], buffer[self.offset + 1], buffer[self.offset + 2], buffer[self.offset + 3]]);
-        self.offset += 4;
+        let ttl = u32::from_be_bytes([buffer[next_offset + 5], buffer[next_offset + 6], buffer[next_offset + 7], buffer[next_offset + 8]]);
+        next_offset += 4;
 
-        self.data_len = u16::from_be_bytes([buffer[self.offset], buffer[self.offset + 1]]);
-        self.offset += 2;
+        let data_len = u16::from_be_bytes([buffer[next_offset + 10], buffer[next_offset + 11]]);
+        next_offset += 2;
 
-        for i in 0..self.data_len
+        match rr_type
         {
-            self.data[i as usize] = buffer[self.offset + i as usize];
-        }
+            // A record
+            0x0001 =>
+            {
+                if data_len != 4
+                {
+                    return Err(mdns_error::MdnsError::MdnsParsingError(mdns_error::MdnsParsingErrorType::Ipv4AddrError));
+                }
 
-        return Ok(());
-    }
+                let mut data = Ipv4Addr::new(buffer[next_offset], buffer[next_offset + 1], buffer[next_offset + 2], buffer[next_offset + 3]);
+                next_offset += 4;
 
-    fn new() -> ResourceRecord
-    {
-        ResourceRecord
-        {
-            name: String::new(),
-            rr_type: Types::ANY,
-            class: 0,
-            ttl: 0,
-            data_len: 0,
-            data: Vec::new(),
-            offset: 0
-        }
+                return Ok(ResourceRecord::A(
+                    ARecord
+                    {
+                        name: name,
+                        class: class,
+                        ttl: ttl,
+                        data_len: data_len,
+                        data: data,
+                        offset: next_offset
+                    }
+                ));
+            },
+            // AAAA record
+            0x001c =>
+            {
+                if data_len != 16
+                {
+                    return Err(mdns_error::MdnsError::MdnsParsingError(mdns_error::MdnsParsingErrorType::Ipv4AddrError));
+                }
+
+                let ip6addr: [u8; 16] = buffer[next_offset..(next_offset + 16)].try_into().unwrap();
+                let data = Ipv6Addr::from(ip6addr);
+                next_offset += 16;
+
+                return Ok(ResourceRecord::AAAA(
+                    AAAARecord
+                    {
+                        name: name,
+                        class: class,
+                        ttl: ttl,
+                        data_len: data_len,
+                        data: data,
+                        offset: next_offset
+                    }
+                ));
+            },
+            // PTR record
+            0x000c =>
+            {
+                let (domain, new_offset) = ResourceRecord::label_to_string(buffer, len, next_offset)?;
+
+                return Ok(ResourceRecord::PTR(
+                    PTRRecord
+                    {
+                        name: name,
+                        class: class,
+                        ttl: ttl,
+                        data_len: data_len,
+                        data: domain,
+                        offset: new_offset
+                    }
+                ));
+            },
+            // TXT record
+            0x0010 =>
+            {
+                let (txts, new_offset) = ResourceRecord::parse_txt(buffer, len, next_offset, data_len as usize)?;
+
+                return Ok(ResourceRecord::TXT(
+                    TXTRecord
+                    {
+                        name: name,
+                        class: class,
+                        ttl: ttl,
+                        data_len: data_len,
+                        data: txts,
+                        offset: new_offset
+                    }
+                ));
+            },
+            // SRV record
+            0x0021 =>
+            {
+                let priority = u16::from_be_bytes([buffer[next_offset], buffer[next_offset + 1]]);
+                next_offset += 2;
+
+                let weight = u16::from_be_bytes([buffer[next_offset], buffer[next_offset + 1]]);
+                next_offset += 2;
+
+                let port = u16::from_be_bytes([buffer[next_offset], buffer[next_offset + 1]]);
+                next_offset += 2;
+
+                let (target, new_offset) = ResourceRecord::label_to_string(buffer, len, next_offset)?;
+
+                return Ok(ResourceRecord::SRV(
+                    SRVRecord
+                    {
+                        name: name,
+                        class: class,
+                        ttl: ttl,
+                        data_len: data_len,
+                        priority: priority,
+                        weight: weight,
+                        port: port,
+                        target: target,
+                        offset: new_offset
+                    }
+                ));
+            },
+            _ =>
+            {
+                return Err(mdns_error::MdnsError::MdnsParsingError(mdns_error::MdnsParsingErrorType::UnknownRrType));
+            }
+        };
     }
 }
 
@@ -312,11 +458,10 @@ mod tests
             buffer[i] = packet[i];
         }
 
-        let mut rr = ResourceRecord::new();
-        rr.name = rr.label_to_string(buffer).unwrap();
+        let (label, offset) = ResourceRecord::label_to_string(buffer, 17, 0).unwrap();
 
-        assert_eq!(rr.name, "_hap._tcp.local");
-        assert_eq!(rr.offset, 17);
+        assert_eq!(label, "_hap._tcp.local");
+        assert_eq!(offset, 17);
     }
 
     #[test]
@@ -334,11 +479,10 @@ mod tests
             buffer[i] = packet[i];
         }
 
-        let mut rr = ResourceRecord::new();
-        rr.name = rr.label_to_string(buffer).unwrap();
+        let (label, offset) = ResourceRecord::label_to_string(buffer, 28, 0).unwrap();
 
-        assert_eq!(rr.name, "_companion-link._tcp.local");
-        assert_eq!(rr.offset, 28);
+        assert_eq!(label, "_companion-link._tcp.local");
+        assert_eq!(offset, 28);
     }
 
     #[test]
@@ -369,11 +513,44 @@ mod tests
             buffer[i] = packet[i];
         }
 
-        let mut rr = ResourceRecord::new();
-        rr.offset = 39;
-        rr.name = rr.label_to_string(buffer).unwrap();
+        let (label, offset) = ResourceRecord::label_to_string(buffer, 229, 39).unwrap();
 
-        assert_eq!(rr.name, "DIRIGERA._hap._tcp.local");
-        assert_eq!(rr.offset, 50);
+        assert_eq!(label, "DIRIGERA._hap._tcp.local");
+        assert_eq!(offset, 50);
+    }
+
+    #[test]
+    fn test_parse_txt()
+    {
+        let mut buffer: [u8; 4096] = [0; 4096];
+        let packet: [u8; 114] =
+        [
+            0xc0, 0x27, 0x00, 0x10, 0x80, 0x01, 0x00, 0x00, 0x11, 0x94, 0x00, 0x66, 0x05, 0x63, 0x23, 0x3d,
+            0x32, 0x32, 0x04, 0x66, 0x66, 0x3d, 0x31, 0x14, 0x69, 0x64, 0x3d, 0x42, 0x35, 0x3a, 0x42, 0x30,
+            0x3a, 0x41, 0x30, 0x3a, 0x36, 0x37, 0x3a, 0x42, 0x34, 0x3a, 0x36, 0x39, 0x22, 0x6d, 0x64, 0x3d,
+            0x44, 0x49, 0x52, 0x49, 0x47, 0x45, 0x52, 0x41, 0x20, 0x48, 0x75, 0x62, 0x20, 0x66, 0x6f, 0x72,
+            0x20, 0x73, 0x6d, 0x61, 0x72, 0x74, 0x20, 0x70, 0x72, 0x6f, 0x64, 0x75, 0x63, 0x74, 0x73, 0x06,
+            0x70, 0x76, 0x3d, 0x31, 0x2e, 0x31, 0x05, 0x73, 0x23, 0x3d, 0x32, 0x30, 0x04, 0x73, 0x66, 0x3d,
+            0x30, 0x04, 0x63, 0x69, 0x3d, 0x32, 0x0b, 0x73, 0x68, 0x3d, 0x6b, 0x37, 0x50, 0x76, 0x43, 0x67,
+            0x3d, 0x3d
+        ];
+
+        for i in 0..packet.len()
+        {
+            buffer[i] = packet[i];
+        }
+
+        let (txts, next_offset) = ResourceRecord::parse_txt(buffer, 114, 12, 102).unwrap();
+
+        assert_eq!(txts.len(), 9);
+        assert_eq!(txts[0], "c#=22");
+        assert_eq!(txts[1], "ff=1");
+        assert_eq!(txts[2], "id=B5:B0:A0:67:B4:69");
+        assert_eq!(txts[3], "md=DIRIGERA Hub for smart products");
+        assert_eq!(txts[4], "pv=1.1");
+        assert_eq!(txts[5], "s#=20");
+        assert_eq!(txts[6], "sf=0");
+        assert_eq!(txts[7], "ci=2");
+        assert_eq!(txts[8], "sh=k7PvCg==");
     }
 }
