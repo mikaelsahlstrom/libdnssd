@@ -1,7 +1,8 @@
 #[macro_use]
 extern crate lazy_static;
+
 use clap::Parser;
-use ansi_term::Colour::Red;
+use log::{ info, warn, error, debug };
 
 mod debug;
 mod dnssd;
@@ -15,6 +16,7 @@ struct Args
 }
 
 fn main() {
+    env_logger::init();
     let args = Args::parse();
 
     if args.list
@@ -24,7 +26,7 @@ fn main() {
             Ok(service) => service,
             Err(err) =>
             {
-                println!("{} {}", Red.bold().paint("Error:"), err);
+                error!("Failed to create service discovery: {}", err);
                 return;
             }
         };
