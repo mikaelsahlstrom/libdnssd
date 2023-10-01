@@ -51,7 +51,7 @@ impl Receiver
                 {
                     if handler.lock().unwrap().is_service_wanted(&answer.label)
                     {
-                        handler.lock().unwrap().add_found_service(String::from(answer.label), answer.address, answer.port);
+                        handler.lock().unwrap().add_found_service(answer.label, answer.address, answer.port);
                     }
                 }
             }
