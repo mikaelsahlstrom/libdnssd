@@ -4,11 +4,9 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Mikael Sahlström <mick.sahlstrom@gmail.com>"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-socket2 = { version = "0.5.3", features = ["all"] }
+socket2 = { version = "0.5.4", features = ["all"] }
 lazy_static = "1.4.0"
-clap = { version = "4.3.0", features = ["derive"] }
+clap = { version = "4.4.6", features = ["derive"] }
 ansi_term = "0.12.1"
-default-net = "0.15.0"
+default-net = "0.17.0"
