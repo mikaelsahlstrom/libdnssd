@@ -3,7 +3,6 @@ use std::sync::{ Arc, Mutex };
 mod dnssd_error;
 mod dns;
 mod socket;
-mod threadtimeout;
 mod discovery_handler;
 mod sender;
 mod receiver;
