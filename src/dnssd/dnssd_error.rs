@@ -5,7 +5,6 @@ pub enum DnsSdError
 {
     Timeout,
     UdpSocketError,
-    ThreadError,
     InvalidDnsSdHeader,
     NotDnsSdResponse,
     NoAnswers,
@@ -15,13 +14,19 @@ pub enum DnsSdError
     LabelCompressionLoop,
     LabelPtrForward,
     LabelInvalid,
-    InvalidDnsSdResponse,
-    NotWantedService,
-    ThreadAlreadyStarted
+    InvalidDnsSdResponse
 }
 
 impl Error for DnsSdError
 {
+}
+
+impl From<std::io::Error> for DnsSdError
+{
+    fn from(_: std::io::Error) -> Self
+    {
+        DnsSdError::UdpSocketError
+    }
 }
 
 impl Display for DnsSdError
@@ -37,10 +42,6 @@ impl Display for DnsSdError
             DnsSdError::UdpSocketError =>
             {
                 write!(f, "DNS-SD error: UDP socket error")
-            },
-            DnsSdError::ThreadError =>
-            {
-                write!(f, "DNS-SD error: Thread error")
             },
             DnsSdError::InvalidDnsSdHeader =>
             {
@@ -81,14 +82,6 @@ impl Display for DnsSdError
             DnsSdError::InvalidDnsSdResponse =>
             {
                 write!(f, "DNS-SD error: Invalid mDNS response")
-            },
-            DnsSdError::NotWantedService =>
-            {
-                write!(f, "DNS-SD error: Not wanted service")
-            },
-            DnsSdError::ThreadAlreadyStarted =>
-            {
-                write!(f, "DNS-SD error: Thread already started")
             }
         }
     }

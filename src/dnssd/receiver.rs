@@ -23,7 +23,7 @@ impl Receiver
 
             loop
             {
-                let (count, addr) = match socket.recv_from(&mut buffer)
+                let (count, _) = match socket.recv_from(&mut buffer)
                 {
                     Ok((count, addr)) => (count, addr),
                     Err(err) =>
@@ -38,7 +38,7 @@ impl Receiver
                     continue;
                 }
 
-                let response = match DnsSdResponse::from(&buffer)
+                let response = match DnsSdResponse::from(&buffer, count)
                 {
                     Ok(response) => response,
                     Err(err) =>

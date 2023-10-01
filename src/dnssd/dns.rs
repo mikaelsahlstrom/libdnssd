@@ -5,7 +5,6 @@ use std::str;
 use crate::dnssd::dnssd_error::DnsSdError;
 
 const FLAGS_QR_MASK: u16 = 0x8000;
-const FLAGS_QR_QUERY: u16 = 0x0000;
 const FLAGS_QR_RESPONSE: u16 = 0x8000;
 
 const MAX_COMPRESSION_POINTERS: u8 = 126;
@@ -51,9 +50,9 @@ enum Type
 
 impl DnsSdHeader
 {
-    pub fn from(buffer: &[u8]) -> Result<DnsSdHeader, DnsSdError>
+    pub fn from(buffer: &[u8], count: usize) -> Result<DnsSdHeader, DnsSdError>
     {
-        if buffer.len() < 12
+        if count < 12
         {
             return Err(DnsSdError::InvalidDnsSdHeader);
         }
@@ -81,19 +80,6 @@ impl DnsSdHeader
         })
     }
 
-    pub fn new_query() -> DnsSdHeader
-    {
-        DnsSdHeader
-        {
-            id: 0,
-            flags: 0,
-            queries_len: 0,
-            answers_len: 0,
-            authorities_len: 0,
-            additional_len: 0
-        }
-    }
-
     pub fn to_bytes(&self) -> Vec<u8>
     {
         let mut buffer = Vec::new();
@@ -111,10 +97,10 @@ impl DnsSdHeader
 
 impl DnsSdResponse
 {
-    pub fn from(buffer: &[u8]) -> Result<DnsSdResponse, DnsSdError>
+    pub fn from(buffer: &[u8], count: usize) -> Result<DnsSdResponse, DnsSdError>
     {
         let mut answers: Vec<Answer> = Vec::new();
-        let header = DnsSdHeader::from(buffer)?;
+        let header = DnsSdHeader::from(buffer, count)?;
 
         if header.flags & FLAGS_QR_MASK != FLAGS_QR_RESPONSE
         {

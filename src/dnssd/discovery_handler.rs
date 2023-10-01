@@ -3,9 +3,9 @@ use std::net::IpAddr;
 
 pub struct Service
 {
-    service: String,
-    ip_addr: IpAddr,
-    port: u16
+    pub service: String,
+    pub ip_addr: IpAddr,
+    pub port: u16
 }
 
 pub struct DiscoveryHandler

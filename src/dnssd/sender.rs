@@ -27,7 +27,7 @@ impl Sender
                     let query = new_query(service)?;
 
                     // Send a query for the service.
-                    socket.send_to(&query, (MULTICAST_ADDR_IPV6, MULTICAST_PORT));
+                    socket.send_to(&query, (MULTICAST_ADDR_IPV6, MULTICAST_PORT))?;
                 }
 
                 // Wait for 5 seconds.
