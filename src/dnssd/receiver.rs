@@ -1,5 +1,6 @@
 use std::sync::{ Arc, Mutex };
 use std::thread;
+use log::{ debug, error };
 
 use crate::dnssd::dnssd_error::DnsSdError;
 use crate::dnssd::dns::DnsSdResponse;
@@ -23,14 +24,17 @@ impl Receiver
 
             loop
             {
-                let (count, _) = match socket.recv_from(&mut buffer)
+                let (count, addr) = match socket.recv_from(&mut buffer)
                 {
                     Ok((count, addr)) => (count, addr),
                     Err(err) =>
                     {
+                        error!("Failed to receive data: {}", err);
                         return socket::convert_error::<()>(Err(err));
                     }
                 };
+
+                debug!("Received {} bytes from {}", count, addr);
 
                 // Only parse buffer if we are looking for services.
                 if handler.lock().unwrap().get_services().len() == 0
@@ -43,12 +47,15 @@ impl Receiver
                     Ok(response) => response,
                     Err(err) =>
                     {
-                        return Err(err);
+                        debug!("Failed to parse response: {}", err);
+                        continue;
                     }
                 };
 
                 for answer in response.answers.into_iter()
                 {
+                    debug!("Found service: {} {} {}", answer.label, answer.address, answer.port);
+
                     if handler.lock().unwrap().is_service_wanted(&answer.label)
                     {
                         handler.lock().unwrap().add_found_service(answer.label, answer.address, answer.port);

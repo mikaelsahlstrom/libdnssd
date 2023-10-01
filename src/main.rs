@@ -2,7 +2,7 @@
 extern crate lazy_static;
 
 use clap::Parser;
-use log::{ info, warn, error };
+use log::{ info, error, debug };
 
 mod dnssd;
 
@@ -17,12 +17,6 @@ struct Args
 fn main() {
     env_logger::init();
     let args = Args::parse();
-
-    if args.service.len() == 0
-    {
-        error!("No service specified.");
-        return;
-    }
 
     let mut service = match dnssd::ServiceDiscovery::new()
     {
@@ -43,7 +37,7 @@ fn main() {
             Some(service) => service,
             None =>
             {
-                warn!("Service not found.");
+                debug!("Service not found.");
                 // Sleep for 5 seconds.
                 std::thread::sleep(std::time::Duration::from_secs(5));
                 continue;
