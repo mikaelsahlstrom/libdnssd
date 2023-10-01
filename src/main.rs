@@ -1,72 +1,32 @@
 #[macro_use]
 extern crate lazy_static;
-
-use std::thread;
-use std::process;
-
 use clap::Parser;
-use ansi_term::Color::Red;
+use ansi_term::Colour::Red;
 
 mod debug;
-mod mdns;
+mod dnssd;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about)]
 struct Args
 {
-    #[arg(short, long, default_value = "v4")]
-    ip_version: String
+    #[arg(short, long)]
+    list: bool
 }
 
-fn main()
-{
+fn main() {
     let args = Args::parse();
 
-    let mut mdns_listener = if args.ip_version == "v4"
+    if args.list
     {
-        match mdns::MDnsListener::new(mdns::IpVersion::IPV4)
+        let service = match dnssd::ServiceDiscovery::new()
         {
-            Ok(l) => l,
-            Err(e) =>
+            Ok(service) => service,
+            Err(err) =>
             {
-                println!("{} {}", Red.bold().paint("ERROR:"), e);
-                process::exit(1);
+                println!("{} {}", Red.bold().paint("Error:"), err);
+                return;
             }
-        }
+        };
     }
-    else if args.ip_version == "v6"
-    {
-        match mdns::MDnsListener::new(mdns::IpVersion::IPV6)
-        {
-            Ok(l) => l,
-            Err(e) =>
-            {
-                println!("{} {}", Red.bold().paint("ERROR:"), e);
-                process::exit(1);
-            }
-        }
-    }
-    else
-    {
-        println!("Unknown IP version. Supported: v4, v6.");
-        process::exit(1);
-    };
-
-    let mdns_handle = thread::spawn(move ||
-    {
-        loop
-        {
-            match mdns_listener.recv_packet()
-            {
-                Ok(()) => (),
-                Err(e) =>
-                {
-                    println!("{} {}", Red.bold().paint("ERROR:"), e);
-                    break;
-                }
-            }
-        }
-    });
-
-    mdns_handle.join().unwrap();
 }
