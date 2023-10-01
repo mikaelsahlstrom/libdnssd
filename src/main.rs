@@ -4,7 +4,6 @@ extern crate lazy_static;
 use clap::Parser;
 use log::{ info, warn, error };
 
-mod debug;
 mod dnssd;
 
 #[derive(Parser)]
