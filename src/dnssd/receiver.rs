@@ -30,7 +30,7 @@ impl Receiver
                     Err(err) =>
                     {
                         error!("Failed to receive data: {}", err);
-                        return socket::convert_error::<()>(Err(err));
+                        continue;
                     }
                 };
 
@@ -54,8 +54,6 @@ impl Receiver
 
                 for answer in response.answers.into_iter()
                 {
-                    debug!("Found service: {} {} {}", answer.label, answer.address, answer.port);
-
                     if handler.lock().unwrap().is_service_wanted(&answer.label)
                     {
                         handler.lock().unwrap().add_found_service(answer.label, answer.address, answer.port);

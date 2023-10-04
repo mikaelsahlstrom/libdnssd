@@ -50,22 +50,22 @@ fn get_default_ipv6_interface() -> u32
 pub fn join_multicast(addr: &SocketAddr) -> Result<UdpSocket, DnsSdError>
 {
     let ip_addr = addr.ip();
-    let socket = convert_error(create_socket(addr))?;
+    let socket = create_socket(addr)?;
 
     match ip_addr
     {
         IpAddr::V4(ref mdns_v4) =>
         {
-            convert_error(socket.join_multicast_v4(mdns_v4, &Ipv4Addr::UNSPECIFIED))?;
+            socket.join_multicast_v4(mdns_v4, &Ipv4Addr::UNSPECIFIED)?;
         },
         IpAddr::V6(ref mdns_v6) =>
         {
-            convert_error(socket.join_multicast_v6(mdns_v6, get_default_ipv6_interface()))?;
-            convert_error(socket.set_only_v6(true))?;
+            socket.join_multicast_v6(mdns_v6, get_default_ipv6_interface())?;
+            socket.set_only_v6(true)?;
         }
     };
 
-    let socket = convert_error(bind_multicast(socket, addr))?;
+    let socket = bind_multicast(socket, addr)?;
 
     Ok(socket.into())
 }
@@ -98,42 +98,12 @@ fn bind_multicast(socket: Socket, addr: &SocketAddr) -> io::Result<Socket>
 
 pub fn create_sender_socket() -> Result<UdpSocket, DnsSdError>
 {
-    let socket = convert_error(Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP)))?;
+    let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
 
-    convert_error(socket.bind(&SockAddr::from(SocketAddr::new(
+    socket.bind(&SockAddr::from(SocketAddr::new(
         Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).into(),
         0,
-    ))))?;
+    )))?;
 
     Ok(socket.into())
-}
-
-pub fn convert_error<T>(result: Result<T, io::Error>) -> Result<T, DnsSdError>
-{
-    match result
-    {
-        Ok(value) => Ok(value),
-        Err(err) =>
-        {
-            match err.kind()
-            {
-                io::ErrorKind::TimedOut => Err(DnsSdError::Timeout),
-                io::ErrorKind::WouldBlock => Err(DnsSdError::Timeout),
-                io::ErrorKind::AddrNotAvailable => Err(DnsSdError::UdpSocketError),
-                io::ErrorKind::AddrInUse => Err(DnsSdError::UdpSocketError),
-                io::ErrorKind::AlreadyExists => Err(DnsSdError::UdpSocketError),
-                io::ErrorKind::ConnectionRefused => Err(DnsSdError::UdpSocketError),
-                io::ErrorKind::ConnectionReset => Err(DnsSdError::UdpSocketError),
-                io::ErrorKind::ConnectionAborted => Err(DnsSdError::UdpSocketError),
-                io::ErrorKind::NotConnected => Err(DnsSdError::UdpSocketError),
-                io::ErrorKind::Interrupted => Err(DnsSdError::UdpSocketError),
-                io::ErrorKind::PermissionDenied => Err(DnsSdError::UdpSocketError),
-                io::ErrorKind::InvalidInput => Err(DnsSdError::UdpSocketError),
-                io::ErrorKind::InvalidData => Err(DnsSdError::UdpSocketError),
-                io::ErrorKind::UnexpectedEof => Err(DnsSdError::UdpSocketError),
-                io::ErrorKind::Other => Err(DnsSdError::UdpSocketError),
-                _ => Err(DnsSdError::UdpSocketError)
-            }
-        }
-    }
 }

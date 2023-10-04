@@ -1,6 +1,6 @@
 use std::fmt::Display;
 use std::net::{ IpAddr, Ipv4Addr, Ipv6Addr };
-use std::str;
+use log::debug;
 
 use crate::dnssd::dnssd_error::DnsSdError;
 
@@ -114,6 +114,8 @@ impl DnsSdResponse
 
         let mut offset: usize = 12;
 
+        debug!("New response:");
+
         for _ in 0..header.answers_len
         {
             // Parse DNS label.
@@ -129,7 +131,6 @@ impl DnsSdResponse
                 Type::A =>
                 {
                     // We got an IPv4 address. Parse and return it.
-
                     if answer_data_len != 4
                     {
                         return Err(DnsSdError::InvalidDnsSdResponse);
@@ -137,6 +138,8 @@ impl DnsSdResponse
 
                     let data = Ipv4Addr::new(buffer[offset], buffer[offset + 1], buffer[offset + 2], buffer[offset + 3]);
                     offset += 4;
+
+                    debug!("\tA: {}", data);
 
                     answers.push(Answer
                     {
@@ -148,7 +151,6 @@ impl DnsSdResponse
                 Type::AAAA =>
                 {
                     // We got an IPv6 address. Parse and return it.
-
                     if answer_data_len != 16
                     {
                         return Err(DnsSdError::InvalidDnsSdResponse);
@@ -166,12 +168,68 @@ impl DnsSdResponse
                     );
                     offset += 16;
 
+                    debug!("\tAAAA: {}", data);
+
                     answers.push(Answer
                     {
                         label: label,
                         address: IpAddr::V6(data),
                         port: 0
                     });
+                },
+                Type::SRV =>
+                {
+                    // We got a service record. Parse and return it.
+                    if answer_data_len < 6
+                    {
+                        return Err(DnsSdError::InvalidDnsSdResponse);
+                    }
+
+                    let port = u16::from_be_bytes([buffer[offset + 4], buffer[offset + 5]]);
+                    offset += 6;
+
+                    // Parse DNS target.
+                    let (label, label_end) = DnsSdResponse::label_to_string(buffer, offset)?;
+                    offset = label_end;
+
+                    debug!("\tSRV: {}, {}", label, port);
+                },
+                Type::PTR =>
+                {
+                    // We got a PTR record. Parse and return it.
+                    let (label, label_end) = DnsSdResponse::label_to_string(buffer, offset)?;
+                    offset = label_end;
+
+                    debug!("\tPTR: {}", label);
+                },
+                Type::TXT =>
+                {
+                    // We got a TXT record. Parse and return it.
+                    let mut records: Vec<String> = Vec::new();
+
+                    let end = offset + answer_data_len as usize;
+                    while offset < end
+                    {
+                        let txt_len = buffer[offset] as usize;
+                        offset += 1;
+
+                        if offset + txt_len > end
+                        {
+                            return Err(DnsSdError::InvalidDnsSdResponse);
+                        }
+
+                        let txt = match std::str::from_utf8(&buffer[offset..offset + txt_len])
+                        {
+                            Ok(s) => s,
+                            Err(_) => return Err(DnsSdError::InvalidUtf8)
+                        };
+
+                        records.push(txt.to_string());
+
+                        offset += txt_len;
+                    }
+
+                    debug!("\tTXT: {}", records.join(", "));
                 },
                 _ =>
                 {
@@ -225,7 +283,7 @@ impl DnsSdResponse
                         return Err(DnsSdError::LabelToLong);
                     }
 
-                    name += match str::from_utf8(&buffer[offset..offset + label_len])
+                    name += match std::str::from_utf8(&buffer[offset..offset + label_len])
                     {
                         Ok(s) => s,
                         Err(_) => return Err(DnsSdError::InvalidUtf8)

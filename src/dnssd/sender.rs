@@ -1,5 +1,6 @@
 use std::sync::{ Arc, Mutex };
 use std::thread;
+use log::debug;
 
 use crate::dnssd::dnssd_error::DnsSdError;
 use crate::dnssd::socket::{ create_sender_socket, MULTICAST_ADDR_IPV6, MULTICAST_PORT };
@@ -17,7 +18,17 @@ impl Sender
     {
         let thread = thread::spawn(move ||
         {
-            let socket = create_sender_socket()?;
+            let socket = match create_sender_socket()
+            {
+                Ok(socket) => socket,
+                Err(err) =>
+                {
+                    debug!("Failed to create sender socket: {}", err);
+                    return Err(err);
+                }
+            };
+
+            debug!("Created sender socket.");
 
             loop
             {
@@ -25,9 +36,19 @@ impl Sender
                 for service in handler.lock().unwrap().get_services()
                 {
                     let query = new_query(service)?;
+                    debug!("Created query for service: {}", service);
 
                     // Send a query for the service.
-                    socket.send_to(&query, (MULTICAST_ADDR_IPV6, MULTICAST_PORT))?;
+                    match socket.send_to(&query, (MULTICAST_ADDR_IPV6, MULTICAST_PORT))
+                    {
+                        Ok(_) => {},
+                        Err(err) =>
+                        {
+                            debug!("Failed to send query: {}", err);
+                            return Err(err.into());
+                        }
+                    }
+                    debug!("Sent query for service: {}", service);
                 }
 
                 // Wait for 5 seconds.

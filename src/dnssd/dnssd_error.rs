@@ -23,9 +23,27 @@ impl Error for DnsSdError
 
 impl From<std::io::Error> for DnsSdError
 {
-    fn from(_: std::io::Error) -> Self
+    fn from(err: std::io::Error) -> Self
     {
-        DnsSdError::UdpSocketError
+        match err.kind()
+        {
+            std::io::ErrorKind::TimedOut => DnsSdError::Timeout,
+            std::io::ErrorKind::WouldBlock => DnsSdError::Timeout,
+            std::io::ErrorKind::AddrNotAvailable => DnsSdError::UdpSocketError,
+            std::io::ErrorKind::AddrInUse => DnsSdError::UdpSocketError,
+            std::io::ErrorKind::AlreadyExists => DnsSdError::UdpSocketError,
+            std::io::ErrorKind::ConnectionRefused => DnsSdError::UdpSocketError,
+            std::io::ErrorKind::ConnectionReset => DnsSdError::UdpSocketError,
+            std::io::ErrorKind::ConnectionAborted => DnsSdError::UdpSocketError,
+            std::io::ErrorKind::NotConnected => DnsSdError::UdpSocketError,
+            std::io::ErrorKind::Interrupted => DnsSdError::UdpSocketError,
+            std::io::ErrorKind::PermissionDenied => DnsSdError::UdpSocketError,
+            std::io::ErrorKind::InvalidInput => DnsSdError::UdpSocketError,
+            std::io::ErrorKind::InvalidData => DnsSdError::UdpSocketError,
+            std::io::ErrorKind::UnexpectedEof => DnsSdError::UdpSocketError,
+            std::io::ErrorKind::Other => DnsSdError::UdpSocketError,
+            _ => DnsSdError::UdpSocketError
+        }
     }
 }
 
