@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::net::{ IpAddr, Ipv4Addr, Ipv6Addr };
+use std::net::{ Ipv4Addr, Ipv6Addr };
 use log::debug;
 
 use crate::dnssd::dnssd_error::DnsSdError;
@@ -12,14 +12,37 @@ const MAX_LABEL_OCTETS: u8 = 255;
 
 pub struct DnsSdResponse
 {
-    pub answers: Vec<Answer>
+    pub ptr_answers: Vec<PtrAnswer>,
+    pub srv_answers: Vec<SrvAnswer>,
+    pub txt_answers: Vec<TxtAnswer>,
+    pub a_answers: Vec<AAnswer>,
+    pub aaaa_answers: Vec<AaaaAnswer>
 }
 
-pub struct Answer
+pub struct PtrAnswer
+{
+    pub label: String
+}
+
+pub struct SrvAnswer
 {
     pub label: String,
-    pub address: IpAddr,
     pub port: u16
+}
+
+pub struct TxtAnswer
+{
+    pub records: Vec<String>
+}
+
+pub struct AAnswer
+{
+    pub address: Ipv4Addr,
+}
+
+pub struct AaaaAnswer
+{
+    pub address: Ipv6Addr,
 }
 
 pub struct DnsSdHeader
@@ -99,7 +122,15 @@ impl DnsSdResponse
 {
     pub fn from(buffer: &[u8], count: usize) -> Result<DnsSdResponse, DnsSdError>
     {
-        let mut answers: Vec<Answer> = Vec::new();
+        let mut response = DnsSdResponse
+        {
+            ptr_answers: Vec::new(),
+            srv_answers: Vec::new(),
+            txt_answers: Vec::new(),
+            a_answers: Vec::new(),
+            aaaa_answers: Vec::new()
+        };
+
         let header = DnsSdHeader::from(buffer, count)?;
 
         if header.flags & FLAGS_QR_MASK != FLAGS_QR_RESPONSE
@@ -107,7 +138,7 @@ impl DnsSdResponse
             return Err(DnsSdError::NotDnsSdResponse);
         }
 
-        if header.answers_len == 0
+        if header.answers_len == 0 && header.additional_len == 0
         {
             return Err(DnsSdError::NoAnswers);
         }
@@ -141,11 +172,9 @@ impl DnsSdResponse
 
                     debug!("\tA: {}", data);
 
-                    answers.push(Answer
+                    response.a_answers.push(AAnswer
                     {
-                        label: label,
-                        address: IpAddr::V4(data),
-                        port: 0
+                        address: data
                     });
                 },
                 Type::AAAA =>
@@ -170,11 +199,9 @@ impl DnsSdResponse
 
                     debug!("\tAAAA: {}", data);
 
-                    answers.push(Answer
+                    response.aaaa_answers.push(AaaaAnswer
                     {
-                        label: label,
-                        address: IpAddr::V6(data),
-                        port: 0
+                        address: data
                     });
                 },
                 Type::SRV =>
@@ -239,10 +266,7 @@ impl DnsSdResponse
             }
         }
 
-        return Ok(DnsSdResponse
-        {
-            answers
-        });
+        return Ok(response);
     }
 
     fn label_to_string(buffer: &[u8], start_offset: usize) -> Result<(String, usize), DnsSdError>

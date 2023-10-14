@@ -44,6 +44,34 @@ fn main() {
             }
         };
 
-        info!("Found service: {} {} {}", service.service, service.ip_addr, service.port);
+        info!("Found service:");
+        for ptr_answer in service.ptr_answers.iter()
+        {
+            info!("\tPTR: {}", ptr_answer.label);
+        }
+
+        for srv_answer in service.srv_answers.iter()
+        {
+            info!("\tSRV: {}:{}", srv_answer.label, srv_answer.port);
+        }
+
+        for txt_answer in service.txt_answers.iter()
+        {
+            info!("\tTXT:");
+            for record in txt_answer.records.iter()
+            {
+                info!("\t\t{}", record);
+            }
+        }
+
+        for a_answer in service.a_answers.iter()
+        {
+            info!("\tA: {}", a_answer.address);
+        }
+
+        for aaaa_answer in service.aaaa_answers.iter()
+        {
+            info!("\tAAAA: {}", aaaa_answer.address);
+        }
     }
 }

@@ -5,7 +5,7 @@ use log::{ debug, error };
 use crate::dnssd::dnssd_error::DnsSdError;
 use crate::dnssd::dns::DnsSdResponse;
 use crate::dnssd::socket;
-use crate::dnssd::discovery_handler::DiscoveryHandler;
+use crate::dnssd::discovery_handler::{ DiscoveryHandler, Service };
 
 pub struct Receiver
 {
@@ -52,11 +52,20 @@ impl Receiver
                     }
                 };
 
-                for answer in response.answers.into_iter()
+                for answer in response.ptr_answers.iter()
                 {
                     if handler.lock().unwrap().is_service_wanted(&answer.label)
                     {
-                        handler.lock().unwrap().add_found_service(answer.label, answer.address, answer.port);
+                        handler.lock().unwrap().add_found_service(answer.label.clone(), Service
+                        {
+                            ptr_answers: response.ptr_answers,
+                            srv_answers: response.srv_answers,
+                            txt_answers: response.txt_answers,
+                            a_answers: response.a_answers,
+                            aaaa_answers: response.aaaa_answers
+                        });
+
+                        break;
                     }
                 }
             }

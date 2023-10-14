@@ -1,11 +1,14 @@
 use std::collections::HashMap;
-use std::net::IpAddr;
+
+use crate::dnssd::dns::{ PtrAnswer, SrvAnswer, TxtAnswer, AAnswer, AaaaAnswer };
 
 pub struct Service
 {
-    pub service: String,
-    pub ip_addr: IpAddr,
-    pub port: u16
+    pub ptr_answers: Vec<PtrAnswer>,
+    pub srv_answers: Vec<SrvAnswer>,
+    pub txt_answers: Vec<TxtAnswer>,
+    pub a_answers: Vec<AAnswer>,
+    pub aaaa_answers: Vec<AaaaAnswer>
 }
 
 pub struct DiscoveryHandler
@@ -35,15 +38,10 @@ impl DiscoveryHandler
         return self.services.contains(service);
     }
 
-    pub fn add_found_service(&mut self, service: String, ip_addr: IpAddr, port: u16)
+    pub fn add_found_service(&mut self, service_label: String, service: Service)
     {
-        let pos = self.services.iter().position(|s| *s == service).unwrap();
-        self.found_services.insert(self.services.remove(pos), Service
-        {
-            service,
-            ip_addr,
-            port
-        });
+        self.services.remove(self.services.iter().position(|x| *x == service_label).unwrap());
+        self.found_services.insert(service_label, service);
     }
 
     pub fn get_found_service(&mut self, service: &str) -> Option<Service>
@@ -61,7 +59,6 @@ impl DiscoveryHandler
 mod tests
 {
     use super::*;
-    use std::net::Ipv4Addr;
 
     #[test]
     fn test_add_service()
@@ -72,12 +69,28 @@ mod tests
     }
 
     #[test]
+    fn test_is_service_wanted()
+    {
+        let mut discovery_handler = DiscoveryHandler::new();
+        discovery_handler.add_service("test".to_string());
+        assert_eq!(discovery_handler.is_service_wanted(&"test".to_string()), true);
+        assert_eq!(discovery_handler.is_service_wanted(&"test2".to_string()), false);
+    }
+
+    #[test]
     fn test_add_found_service()
     {
         let mut discovery_handler = DiscoveryHandler::new();
         let service = String::from("test");
         discovery_handler.add_service("test".to_string());
-        discovery_handler.add_found_service(service, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 1234);
+        discovery_handler.add_found_service(service, Service
+        {
+            ptr_answers: Vec::new(),
+            srv_answers: Vec::new(),
+            txt_answers: Vec::new(),
+            a_answers: Vec::new(),
+            aaaa_answers: Vec::new()
+        });
         assert_eq!(discovery_handler.services.len(), 0);
         assert_eq!(discovery_handler.found_services.len(), 1);
     }
@@ -88,14 +101,18 @@ mod tests
         let mut discovery_handler = DiscoveryHandler::new();
         let service = String::from("test");
         discovery_handler.add_service("test".to_string());
-        discovery_handler.add_found_service(service, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 1234);
-        let service = discovery_handler.get_found_service("test");
-        assert_eq!(service.is_some(), true);
-        match service.as_ref().unwrap().ip_addr
+        discovery_handler.add_found_service(service.clone(), Service
         {
-            IpAddr::V4(ip_addr) => assert_eq!(ip_addr, Ipv4Addr::new(127, 0, 0, 1)),
-            _ => assert_eq!(true, false)
-        }
-        assert_eq!(service.unwrap().port, 1234);
+            ptr_answers: Vec::new(),
+            srv_answers: Vec::new(),
+            txt_answers: Vec::new(),
+            a_answers: Vec::new(),
+            aaaa_answers: Vec::new()
+        });
+        assert_eq!(discovery_handler.services.len(), 0);
+        assert_eq!(discovery_handler.found_services.len(), 1);
+        let found_service = discovery_handler.get_found_service(&service);
+        assert_eq!(found_service.is_some(), true);
+        assert_eq!(discovery_handler.found_services.len(), 0);
     }
 }
