@@ -8,6 +8,6 @@ authors = ["Mikael Sahlström <mick.sahlstrom@gmail.com>"]
 socket2 = { version = "0.5.4", features = ["all"] }
 lazy_static = "1.4.0"
 clap = { version = "4.4.6", features = ["derive"] }
-default-net = "0.17.0"
+default-net = "0.18.0"
 log = "0.4.20"
 env_logger = "0.10.0"
