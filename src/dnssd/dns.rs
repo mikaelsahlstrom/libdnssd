@@ -220,6 +220,12 @@ impl DnsSdResponse
                     offset = label_end;
 
                     debug!("\tSRV: {}, {}", label, port);
+
+                    response.srv_answers.push(SrvAnswer
+                    {
+                        label,
+                        port
+                    });
                 },
                 Type::PTR =>
                 {
@@ -228,6 +234,11 @@ impl DnsSdResponse
                     offset = label_end;
 
                     debug!("\tPTR: {}", label);
+
+                    response.ptr_answers.push(PtrAnswer
+                    {
+                        label
+                    });
                 },
                 Type::TXT =>
                 {
@@ -257,6 +268,11 @@ impl DnsSdResponse
                     }
 
                     debug!("\tTXT: {}", records.join(", "));
+
+                    response.txt_answers.push(TxtAnswer
+                    {
+                        records
+                    });
                 },
                 _ =>
                 {

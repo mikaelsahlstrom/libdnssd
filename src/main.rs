@@ -73,5 +73,7 @@ fn main() {
         {
             info!("\tAAAA: {}", aaaa_answer.address);
         }
+
+        return;
     }
 }
