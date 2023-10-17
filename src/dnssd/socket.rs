@@ -100,6 +100,9 @@ pub fn create_sender_socket() -> Result<UdpSocket, DnsSdError>
 {
     let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
 
+    // Sometimes MacOS will send a query on the wrong interface, causing no route to host error. Force default interface.
+    socket.set_multicast_if_v6(get_default_ipv6_interface())?;
+
     socket.bind(&SockAddr::from(SocketAddr::new(
         Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).into(),
         0,
