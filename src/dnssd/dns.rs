@@ -1,6 +1,5 @@
 use std::fmt::Display;
 use std::net::{ Ipv4Addr, Ipv6Addr };
-use log::debug;
 
 use crate::dnssd::dnssd_error::DnsSdError;
 
@@ -10,39 +9,44 @@ const FLAGS_QR_RESPONSE: u16 = 0x8000;
 const MAX_COMPRESSION_POINTERS: u8 = 126;
 const MAX_LABEL_OCTETS: u8 = 255;
 
-pub struct DnsSdResponse
+pub enum DnsSdResponse
 {
-    pub ptr_answers: Vec<PtrAnswer>,
-    pub srv_answers: Vec<SrvAnswer>,
-    pub txt_answers: Vec<TxtAnswer>,
-    pub a_answers: Vec<AAnswer>,
-    pub aaaa_answers: Vec<AaaaAnswer>
+    PtrAnswer(PtrAnswer),
+    SrvAnswer(SrvAnswer),
+    TxtAnswer(TxtAnswer),
+    AAnswer(AAnswer),
+    AaaaAnswer(AaaaAnswer)
 }
 
 pub struct PtrAnswer
 {
-    pub label: String
+    pub label: String,
+    pub service: String
 }
 
 pub struct SrvAnswer
 {
     pub label: String,
+    pub service: String,
     pub port: u16
 }
 
 pub struct TxtAnswer
 {
+    pub label: String,
     pub records: Vec<String>
 }
 
 pub struct AAnswer
 {
-    pub address: Ipv4Addr,
+    pub label: String,
+    pub address: Ipv4Addr
 }
 
 pub struct AaaaAnswer
 {
-    pub address: Ipv6Addr,
+    pub label: String,
+    pub address: Ipv6Addr
 }
 
 pub struct DnsSdHeader
@@ -118,18 +122,12 @@ impl DnsSdHeader
     }
 }
 
+
 impl DnsSdResponse
 {
-    pub fn from(buffer: &[u8], count: usize) -> Result<DnsSdResponse, DnsSdError>
+    pub fn from(buffer: &[u8], count: usize) -> Result<Vec<DnsSdResponse>, DnsSdError>
     {
-        let mut response = DnsSdResponse
-        {
-            ptr_answers: Vec::new(),
-            srv_answers: Vec::new(),
-            txt_answers: Vec::new(),
-            a_answers: Vec::new(),
-            aaaa_answers: Vec::new()
-        };
+        let mut responses: Vec<DnsSdResponse> = Vec::new();
 
         let header = DnsSdHeader::from(buffer, count)?;
 
@@ -145,144 +143,137 @@ impl DnsSdResponse
 
         let mut offset: usize = 12;
 
-        debug!("New response:");
+        // Parse queries to get correct start offset for answers.
+        for _ in 0..header.queries_len
+        {
+            // Parse question label.
+            let (_, label_end) = DnsSdResponse::label_to_string(buffer, offset)?;
+            offset = label_end;
+            offset += 4;
+        }
 
         for _ in 0..header.answers_len
         {
-            // Parse DNS label.
-            let (label, label_end) = DnsSdResponse::label_to_string(buffer, offset)?;
-            offset = label_end;
+            offset = DnsSdResponse::parse_record(buffer, offset, &mut responses)?;
+        }
 
-            let answer_type = Type::from(u16::from_be_bytes([buffer[offset], buffer[offset + 1]]))?;
-            let answer_data_len = u16::from_be_bytes([buffer[offset + 8], buffer[offset + 9]]);
-            offset += 10;
+        for _ in 0..header.additional_len
+        {
+            offset = DnsSdResponse::parse_record(buffer, offset, &mut responses)?;
+        }
 
-            match answer_type
+        return Ok(responses);
+    }
+
+    fn parse_record(buffer: &[u8], mut offset: usize, responses: &mut Vec<DnsSdResponse>) -> Result<usize, DnsSdError>
+    {
+        // Parse DNS label.
+        let (label, label_end) = DnsSdResponse::label_to_string(buffer, offset)?;
+        offset = label_end;
+
+        let answer_type = Type::from(u16::from_be_bytes([buffer[offset], buffer[offset + 1]]))?;
+        let answer_data_len = u16::from_be_bytes([buffer[offset + 8], buffer[offset + 9]]);
+        offset += 10;
+
+        match answer_type
+        {
+            Type::A =>
             {
-                Type::A =>
+                // We got an IPv4 address. Parse and return it.
+                if answer_data_len != 4
                 {
-                    // We got an IPv4 address. Parse and return it.
-                    if answer_data_len != 4
-                    {
-                        return Err(DnsSdError::InvalidDnsSdResponse);
-                    }
-
-                    let data = Ipv4Addr::new(buffer[offset], buffer[offset + 1], buffer[offset + 2], buffer[offset + 3]);
-                    offset += 4;
-
-                    debug!("\tA: {}", data);
-
-                    response.a_answers.push(AAnswer
-                    {
-                        address: data
-                    });
-                },
-                Type::AAAA =>
-                {
-                    // We got an IPv6 address. Parse and return it.
-                    if answer_data_len != 16
-                    {
-                        return Err(DnsSdError::InvalidDnsSdResponse);
-                    }
-
-                    let data = Ipv6Addr::new(
-                        u16::from_be_bytes([buffer[offset], buffer[offset + 1]]),
-                        u16::from_be_bytes([buffer[offset + 2], buffer[offset + 3]]),
-                        u16::from_be_bytes([buffer[offset + 4], buffer[offset + 5]]),
-                        u16::from_be_bytes([buffer[offset + 6], buffer[offset + 7]]),
-                        u16::from_be_bytes([buffer[offset + 8], buffer[offset + 9]]),
-                        u16::from_be_bytes([buffer[offset + 10], buffer[offset + 11]]),
-                        u16::from_be_bytes([buffer[offset + 12], buffer[offset + 13]]),
-                        u16::from_be_bytes([buffer[offset + 14], buffer[offset + 15]])
-                    );
-                    offset += 16;
-
-                    debug!("\tAAAA: {}", data);
-
-                    response.aaaa_answers.push(AaaaAnswer
-                    {
-                        address: data
-                    });
-                },
-                Type::SRV =>
-                {
-                    // We got a service record. Parse and return it.
-                    if answer_data_len < 6
-                    {
-                        return Err(DnsSdError::InvalidDnsSdResponse);
-                    }
-
-                    let port = u16::from_be_bytes([buffer[offset + 4], buffer[offset + 5]]);
-                    offset += 6;
-
-                    // Parse DNS target.
-                    let (label, label_end) = DnsSdResponse::label_to_string(buffer, offset)?;
-                    offset = label_end;
-
-                    debug!("\tSRV: {}, {}", label, port);
-
-                    response.srv_answers.push(SrvAnswer
-                    {
-                        label,
-                        port
-                    });
-                },
-                Type::PTR =>
-                {
-                    // We got a PTR record. Parse and return it.
-                    let (label, label_end) = DnsSdResponse::label_to_string(buffer, offset)?;
-                    offset = label_end;
-
-                    debug!("\tPTR: {}", label);
-
-                    response.ptr_answers.push(PtrAnswer
-                    {
-                        label
-                    });
-                },
-                Type::TXT =>
-                {
-                    // We got a TXT record. Parse and return it.
-                    let mut records: Vec<String> = Vec::new();
-
-                    let end = offset + answer_data_len as usize;
-                    while offset < end
-                    {
-                        let txt_len = buffer[offset] as usize;
-                        offset += 1;
-
-                        if offset + txt_len > end
-                        {
-                            return Err(DnsSdError::InvalidDnsSdResponse);
-                        }
-
-                        let txt = match std::str::from_utf8(&buffer[offset..offset + txt_len])
-                        {
-                            Ok(s) => s,
-                            Err(_) => return Err(DnsSdError::InvalidUtf8)
-                        };
-
-                        records.push(txt.to_string());
-
-                        offset += txt_len;
-                    }
-
-                    debug!("\tTXT: {}", records.join(", "));
-
-                    response.txt_answers.push(TxtAnswer
-                    {
-                        records
-                    });
-                },
-                _ =>
-                {
-                    // We got an answer we don't care about. Skip it.
-                    offset += answer_data_len as usize;
+                    return Err(DnsSdError::InvalidDnsSdResponse);
                 }
+
+                let data = Ipv4Addr::new(buffer[offset], buffer[offset + 1], buffer[offset + 2], buffer[offset + 3]);
+                offset += 4;
+
+                responses.push(DnsSdResponse::AAnswer(AAnswer { label, address: data }));
+            },
+            Type::AAAA =>
+            {
+                // We got an IPv6 address. Parse and return it.
+                if answer_data_len != 16
+                {
+                    return Err(DnsSdError::InvalidDnsSdResponse);
+                }
+
+                let data = Ipv6Addr::new(
+                    u16::from_be_bytes([buffer[offset], buffer[offset + 1]]),
+                    u16::from_be_bytes([buffer[offset + 2], buffer[offset + 3]]),
+                    u16::from_be_bytes([buffer[offset + 4], buffer[offset + 5]]),
+                    u16::from_be_bytes([buffer[offset + 6], buffer[offset + 7]]),
+                    u16::from_be_bytes([buffer[offset + 8], buffer[offset + 9]]),
+                    u16::from_be_bytes([buffer[offset + 10], buffer[offset + 11]]),
+                    u16::from_be_bytes([buffer[offset + 12], buffer[offset + 13]]),
+                    u16::from_be_bytes([buffer[offset + 14], buffer[offset + 15]])
+                );
+                offset += 16;
+
+                responses.push(DnsSdResponse::AaaaAnswer(AaaaAnswer { label, address: data }));
+            },
+            Type::SRV =>
+            {
+                // We got a service record. Parse and return it.
+                if answer_data_len < 6
+                {
+                    return Err(DnsSdError::InvalidDnsSdResponse);
+                }
+
+                let port = u16::from_be_bytes([buffer[offset + 4], buffer[offset + 5]]);
+                offset += 6;
+
+                // Parse DNS target.
+                let (service, label_end) = DnsSdResponse::label_to_string(buffer, offset)?;
+                offset = label_end;
+
+                responses.push(DnsSdResponse::SrvAnswer(SrvAnswer { label, service, port }));
+            },
+            Type::PTR =>
+            {
+                // We got a PTR record. Parse and return it.
+                let (service, label_end) = DnsSdResponse::label_to_string(buffer, offset)?;
+                offset = label_end;
+
+                responses.push(DnsSdResponse::PtrAnswer(PtrAnswer { label, service }));
+            },
+            Type::TXT =>
+            {
+                // We got a TXT record. Parse and return it.
+                let mut records: Vec<String> = Vec::new();
+
+                let end = offset + answer_data_len as usize;
+                while offset < end
+                {
+                    let txt_len = buffer[offset] as usize;
+                    offset += 1;
+
+                    if offset + txt_len > end
+                    {
+                        return Err(DnsSdError::InvalidDnsSdResponse);
+                    }
+
+                    let txt = match std::str::from_utf8(&buffer[offset..offset + txt_len])
+                    {
+                        Ok(s) => s,
+                        Err(_) => return Err(DnsSdError::InvalidUtf8)
+                    };
+
+                    records.push(txt.to_string());
+
+                    offset += txt_len;
+                }
+
+                responses.push(DnsSdResponse::TxtAnswer(TxtAnswer { label, records }));
+            },
+            _ =>
+            {
+                // We got an answer we don't care about. Skip it.
+                offset += answer_data_len as usize;
             }
         }
 
-        return Ok(response);
+        Ok(offset)
     }
 
     fn label_to_string(buffer: &[u8], start_offset: usize) -> Result<(String, usize), DnsSdError>
@@ -458,6 +449,21 @@ impl Display for Type
     }
 }
 
+impl std::fmt::Debug for DnsSdResponse
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    {
+        match self
+        {
+            DnsSdResponse::PtrAnswer(answer) => write!(f, "PTR: {} -> {}", answer.label, answer.service),
+            DnsSdResponse::SrvAnswer(answer) => write!(f, "SRV: {} -> {}:{}", answer.label, answer.service, answer.port),
+            DnsSdResponse::TxtAnswer(answer) => write!(f, "TXT: {} -> {:?}", answer.label, answer.records),
+            DnsSdResponse::AAnswer(answer) => write!(f, "A: {} -> {}", answer.label, answer.address),
+            DnsSdResponse::AaaaAnswer(answer) => write!(f, "AAAA: {} -> {}", answer.label, answer.address)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests
 {
@@ -590,5 +596,61 @@ mod tests
         assert_eq!(query[30], 0xff);
         assert_eq!(query[31], 0x80);
         assert_eq!(query[32], 0x01);
+    }
+
+    #[test]
+    fn test_dns_response_from()
+    {
+        let packet: [u8; 221] = [ 0x00, 0x00, 0x84, 0x00, 0x00, 0x01, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x08, 0x44, 0x49, 0x52,
+                                  0x49, 0x47, 0x45, 0x52, 0x41, 0x04, 0x5f, 0x68, 0x61, 0x70, 0x04, 0x5f, 0x74, 0x63, 0x70, 0x05,
+                                  0x6c, 0x6f, 0x63, 0x61, 0x6c, 0x00, 0x00, 0xff, 0x80, 0x01, 0xc0, 0x0c, 0x00, 0x21, 0x00, 0x01,
+                                  0x00, 0x00, 0x00, 0x0a, 0x00, 0x19, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x40, 0x10, 0x67, 0x77, 0x32,
+                                  0x2d, 0x38, 0x66, 0x66, 0x36, 0x65, 0x64, 0x32, 0x31, 0x30, 0x61, 0x34, 0x38, 0xc0, 0x1f, 0xc0,
+                                  0x3c, 0x00, 0x1c, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x10, 0xfd, 0x05, 0x0b, 0x30, 0x32,
+                                  0x24, 0x4a, 0x5c, 0x6a, 0xec, 0x8a, 0xff, 0xfe, 0x00, 0xd0, 0xed, 0xc0, 0x0c, 0x00, 0x10, 0x00,
+                                  0x01, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x66, 0x05, 0x63, 0x23, 0x3d, 0x34, 0x30, 0x04, 0x66, 0x66,
+                                  0x3d, 0x31, 0x14, 0x69, 0x64, 0x3d, 0x42, 0x35, 0x3a, 0x42, 0x30, 0x3a, 0x41, 0x30, 0x3a, 0x36,
+                                  0x37, 0x3a, 0x42, 0x34, 0x3a, 0x36, 0x39, 0x22, 0x6d, 0x64, 0x3d, 0x44, 0x49, 0x52, 0x49, 0x47,
+                                  0x45, 0x52, 0x41, 0x20, 0x48, 0x75, 0x62, 0x20, 0x66, 0x6f, 0x72, 0x20, 0x73, 0x6d, 0x61, 0x72,
+                                  0x74, 0x20, 0x70, 0x72, 0x6f, 0x64, 0x75, 0x63, 0x74, 0x73, 0x06, 0x70, 0x76, 0x3d, 0x31, 0x2e,
+                                  0x31, 0x05, 0x73, 0x23, 0x3d, 0x34, 0x37, 0x04, 0x73, 0x66, 0x3d, 0x30, 0x04, 0x63, 0x69, 0x3d,
+                                  0x32, 0x0b, 0x73, 0x68, 0x3d, 0x6b, 0x37, 0x50, 0x76, 0x43, 0x67, 0x3d, 0x3d ];
+
+        let responses = DnsSdResponse::from(&packet, 221).unwrap();
+
+        assert_eq!(responses.len(), 4);
+/*
+        match responses[0]
+        {
+            DnsSdResponse::PtrAnswer(answer) =>
+            {
+                assert_eq!(answer.label, "DIRIGERA._hap._tcp.local");
+                assert_eq!(answer.service, "gw2");
+            },
+            _ => assert!(false)
+        }
+
+        match responses[1]
+        {
+            DnsSdResponse::TxtAnswer(answer) =>
+            {
+                assert_eq!(answer.label, "DIRIGERA._hap._tcp.local");
+                assert_eq!(answer.records.len(), 1);
+                assert_eq!(answer.records[0], "c#=40,ff=1,id=B5:B0:A0:67:B4:69\"md=DIRIGERA Hub for smart products\"pv=1.1:s#=47:sf=0:ci=2:sh=k7PvCg==");
+            },
+            _ => assert!(false)
+        }
+
+        match responses[2]
+        {
+            DnsSdResponse::SrvAnswer(answer) =>
+            {
+                assert_eq!(answer.label, "DIRIGERA._hap._tcp.local");
+                assert_eq!(answer.service, "c#=40,ff=1,id=B5:B0:A0:67:B4:69\"md=DIRIGERA Hub for smart products\"pv=1.1:s#=47:sf=0:ci=2:sh=k7PvCg==");
+                assert_eq!(answer.port, 0x0a);
+            },
+            _ => assert!(false)
+        }
+*/
     }
 }

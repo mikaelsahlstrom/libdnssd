@@ -5,11 +5,11 @@ use log::{ debug, error };
 use crate::dnssd::dnssd_error::DnsSdError;
 use crate::dnssd::dns::DnsSdResponse;
 use crate::dnssd::socket;
-use crate::dnssd::discovery_handler::{ DiscoveryHandler, Service };
+use crate::dnssd::discovery_handler::DiscoveryHandler;
 
 pub struct Receiver
 {
-    thread: Option<thread::JoinHandle<Result<(), DnsSdError>>>
+    _thread: Option<thread::JoinHandle<Result<(), DnsSdError>>>
 }
 
 impl Receiver
@@ -42,9 +42,9 @@ impl Receiver
                     continue;
                 }
 
-                let response = match DnsSdResponse::from(&buffer, count)
+                let responses = match DnsSdResponse::from(&buffer, count)
                 {
-                    Ok(response) => response,
+                    Ok(responses) => responses,
                     Err(err) =>
                     {
                         debug!("Failed to parse response: {}", err);
@@ -52,20 +52,122 @@ impl Receiver
                     }
                 };
 
-                for answer in response.ptr_answers.iter()
+                // Start by finding all PTR and SRV answers that are wanted.
+                let mut wanted_ptrs: Vec<String> = Vec::new();
+                for response in responses.iter()
                 {
-                    if handler.lock().unwrap().is_service_wanted(&answer.label)
+                    match response
                     {
-                        handler.lock().unwrap().add_found_service(answer.label.clone(), Service
+                        DnsSdResponse::PtrAnswer(ptr) =>
                         {
-                            ptr_answers: response.ptr_answers,
-                            srv_answers: response.srv_answers,
-                            txt_answers: response.txt_answers,
-                            a_answers: response.a_answers,
-                            aaaa_answers: response.aaaa_answers
-                        });
+                            if handler.lock().unwrap().is_service_wanted(&ptr.label)
+                            {
+                                wanted_ptrs.push(ptr.service.clone());
+                            }
+                        },
+                        DnsSdResponse::SrvAnswer(srv) =>
+                        {
+                            if handler.lock().unwrap().is_service_wanted(&srv.label)
+                            {
+                                wanted_ptrs.push(srv.service.clone());
+                            }
+                        },
+                        _ => {
+                            // Ignore other responses for now.
+                        }
+                    }
+                }
 
-                        break;
+                // Then find all other answers that are wanted or in wanted ptrs.
+                for response in responses.into_iter()
+                {
+                    match response
+                    {
+                        DnsSdResponse::SrvAnswer(srv) =>
+                        {
+                            if handler.lock().unwrap().is_service_wanted(&srv.label) ||
+                                wanted_ptrs.contains(&&srv.label)
+                            {
+                                handler.lock().unwrap().add_found_service(
+                                    srv.label.clone(),
+                                    DnsSdResponse::SrvAnswer(
+                                        crate::dnssd::dns::SrvAnswer
+                                        {
+                                            label: srv.label,
+                                            service: srv.service,
+                                            port: srv.port
+                                        }
+                                    )
+                                );
+                            }
+                        },
+                        DnsSdResponse::TxtAnswer(txt) =>
+                        {
+                            if handler.lock().unwrap().is_service_wanted(&txt.label) ||
+                                wanted_ptrs.contains(&&txt.label)
+                            {
+                                handler.lock().unwrap().add_found_service(
+                                    txt.label.clone(),
+                                    DnsSdResponse::TxtAnswer(
+                                        crate::dnssd::dns::TxtAnswer
+                                        {
+                                            label: txt.label,
+                                            records: txt.records
+                                        }
+                                    )
+                                );
+                            }
+                        },
+                        DnsSdResponse::AAnswer(a) =>
+                        {
+                            if handler.lock().unwrap().is_service_wanted(&a.label) ||
+                                wanted_ptrs.contains(&&a.label)
+                            {
+                                handler.lock().unwrap().add_found_service(
+                                    a.label.clone(),
+                                    DnsSdResponse::AAnswer(
+                                        crate::dnssd::dns::AAnswer
+                                        {
+                                            label: a.label,
+                                            address: a.address
+                                        }
+                                    )
+                                );
+                            }
+                        },
+                        DnsSdResponse::AaaaAnswer(aaa) =>
+                        {
+                            if handler.lock().unwrap().is_service_wanted(&aaa.label) ||
+                                wanted_ptrs.contains(&&aaa.label)
+                            {
+                                handler.lock().unwrap().add_found_service(
+                                    aaa.label.clone(),
+                                    DnsSdResponse::AaaaAnswer(
+                                        crate::dnssd::dns::AaaaAnswer
+                                        {
+                                            label: aaa.label,
+                                            address: aaa.address
+                                        }
+                                    )
+                                );
+                            }
+                        },
+                        DnsSdResponse::PtrAnswer(ptr) =>
+                        {
+                            if handler.lock().unwrap().is_service_wanted(&ptr.label)
+                            {
+                                handler.lock().unwrap().add_found_service(
+                                    ptr.label.clone(),
+                                    DnsSdResponse::PtrAnswer(
+                                        crate::dnssd::dns::PtrAnswer
+                                        {
+                                            label: ptr.label,
+                                            service: ptr.service
+                                        }
+                                    )
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -73,7 +175,7 @@ impl Receiver
 
         Ok(Receiver
         {
-            thread: Some(thread)
+            _thread: Some(thread)
         })
     }
 }

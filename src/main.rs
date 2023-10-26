@@ -32,47 +32,17 @@ fn main() {
 
     loop
     {
-        let service = match service.get_service(args.service.as_str())
+        let service = match service.get_ipv6_and_port(args.service.as_str())
         {
             Some(service) => service,
             None =>
             {
-                debug!("Service not found.");
-                // Sleep for 5 seconds.
-                std::thread::sleep(std::time::Duration::from_secs(5));
+                std::thread::sleep(std::time::Duration::from_millis(200));
                 continue;
             }
         };
 
-        info!("Found service:");
-        for ptr_answer in service.ptr_answers.iter()
-        {
-            info!("\tPTR: {}", ptr_answer.label);
-        }
-
-        for srv_answer in service.srv_answers.iter()
-        {
-            info!("\tSRV: {}:{}", srv_answer.label, srv_answer.port);
-        }
-
-        for txt_answer in service.txt_answers.iter()
-        {
-            info!("\tTXT:");
-            for record in txt_answer.records.iter()
-            {
-                info!("\t\t{}", record);
-            }
-        }
-
-        for a_answer in service.a_answers.iter()
-        {
-            info!("\tA: {}", a_answer.address);
-        }
-
-        for aaaa_answer in service.aaaa_answers.iter()
-        {
-            info!("\tAAAA: {}", aaaa_answer.address);
-        }
+        info!("Found service: {}:{}", service.0, service.1);
 
         return;
     }
