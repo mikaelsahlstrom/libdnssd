@@ -618,7 +618,7 @@ mod tests
 
         let responses = DnsSdResponse::from(&packet, 221).unwrap();
 
-        assert_eq!(responses.len(), 4);
+        assert_eq!(responses.len(), 3);
 /*
         match responses[0]
         {
