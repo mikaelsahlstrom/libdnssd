@@ -43,7 +43,7 @@ impl ServiceDiscovery
         self.discovery_handler.lock().unwrap().add_service(String::from(service));
     }
 
-    pub fn get_ipv6_and_port(&mut self, service: &str) -> Option<(Ipv6Addr, u16)>
+    pub fn get_ipv6_and_port(&self, service: &str) -> Option<(Ipv6Addr, u16)>
     {
         let mut response: (Ipv6Addr, u16) = (Ipv6Addr::UNSPECIFIED, 0);
         let maybe_services = self.discovery_handler.lock().unwrap().get_found_service(service);
@@ -157,5 +157,4 @@ impl ServiceDiscovery
 
         return None;
     }
-
 }

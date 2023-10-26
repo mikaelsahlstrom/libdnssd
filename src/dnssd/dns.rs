@@ -619,38 +619,42 @@ mod tests
         let responses = DnsSdResponse::from(&packet, 221).unwrap();
 
         assert_eq!(responses.len(), 3);
-/*
-        match responses[0]
+        let mut matches = 0;
+        for response in responses
         {
-            DnsSdResponse::PtrAnswer(answer) =>
+            match response
             {
-                assert_eq!(answer.label, "DIRIGERA._hap._tcp.local");
-                assert_eq!(answer.service, "gw2");
-            },
-            _ => assert!(false)
+                DnsSdResponse::SrvAnswer(answer) =>
+                {
+                    assert_eq!(answer.label, "DIRIGERA._hap._tcp.local");
+                    assert_eq!(answer.service, "gw2-8ff6ed210a48.local");
+                    assert_eq!(answer.port, 8000);
+                    matches += 1;
+                },
+                DnsSdResponse::TxtAnswer(answer) =>
+                {
+                    assert_eq!(answer.label, "DIRIGERA._hap._tcp.local");
+                    assert_eq!(answer.records.len(), 9);
+                    assert_eq!(answer.records[0], "c#=40");
+                    assert_eq!(answer.records[1], "ff=1");
+                    assert_eq!(answer.records[2], "id=B5:B0:A0:67:B4:69");
+                    assert_eq!(answer.records[3], "md=DIRIGERA Hub for smart products");
+                    assert_eq!(answer.records[4], "pv=1.1");
+                    assert_eq!(answer.records[5], "s#=47");
+                    assert_eq!(answer.records[6], "sf=0");
+                    assert_eq!(answer.records[7], "ci=2");
+                    assert_eq!(answer.records[8], "sh=k7PvCg==");
+                    matches += 1;
+                },
+                DnsSdResponse::AaaaAnswer(answer) =>
+                {
+                    assert_eq!(answer.label, "gw2-8ff6ed210a48.local");
+                    assert_eq!(answer.address, Ipv6Addr::new(0xfd05, 0x0b30, 0x3224, 0x4a5c, 0x6aec, 0x8aff, 0xfe00, 0xd0ed));
+                    matches += 1;
+                },
+                _ => ()
+            }
         }
-
-        match responses[1]
-        {
-            DnsSdResponse::TxtAnswer(answer) =>
-            {
-                assert_eq!(answer.label, "DIRIGERA._hap._tcp.local");
-                assert_eq!(answer.records.len(), 1);
-                assert_eq!(answer.records[0], "c#=40,ff=1,id=B5:B0:A0:67:B4:69\"md=DIRIGERA Hub for smart products\"pv=1.1:s#=47:sf=0:ci=2:sh=k7PvCg==");
-            },
-            _ => assert!(false)
-        }
-
-        match responses[2]
-        {
-            DnsSdResponse::SrvAnswer(answer) =>
-            {
-                assert_eq!(answer.label, "DIRIGERA._hap._tcp.local");
-                assert_eq!(answer.service, "c#=40,ff=1,id=B5:B0:A0:67:B4:69\"md=DIRIGERA Hub for smart products\"pv=1.1:s#=47:sf=0:ci=2:sh=k7PvCg==");
-                assert_eq!(answer.port, 0x0a);
-            },
-            _ => assert!(false)
-        }
-*/
+        assert_eq!(matches, 3);
     }
 }

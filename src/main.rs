@@ -32,9 +32,9 @@ fn main() {
 
     loop
     {
-        let service = match service.get_ipv6_and_port(args.service.as_str())
+        let ip_port = match service.get_ipv6_and_port(args.service.as_str())
         {
-            Some(service) => service,
+            Some(ip_port) => ip_port,
             None =>
             {
                 std::thread::sleep(std::time::Duration::from_millis(200));
@@ -42,7 +42,7 @@ fn main() {
             }
         };
 
-        info!("Found service: {}:{}", service.0, service.1);
+        info!("Found service: {}:{}", ip_port.0, ip_port.1);
 
         return;
     }
