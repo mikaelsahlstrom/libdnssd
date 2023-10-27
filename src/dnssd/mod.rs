@@ -17,8 +17,8 @@ use log::debug;
 pub struct ServiceDiscovery
 {
     discovery_handler: Arc<Mutex<DiscoveryHandler>>,
-    receiver: Option<Receiver>,
-    sender: Sender
+    _receiver: Option<Receiver>,
+    _sender: Sender
 }
 
 impl ServiceDiscovery
@@ -33,8 +33,8 @@ impl ServiceDiscovery
         Ok(ServiceDiscovery
         {
             discovery_handler: handler,
-            receiver: None,
-            sender: sender
+            _receiver: None,
+            _sender: sender
         })
     }
 
