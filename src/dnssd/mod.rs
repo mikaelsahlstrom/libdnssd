@@ -46,14 +46,15 @@ impl ServiceDiscovery
     pub fn get_ipv6_and_port(&self, service: &str) -> Option<(Ipv6Addr, u16)>
     {
         let mut response: (Ipv6Addr, u16) = (Ipv6Addr::UNSPECIFIED, 0);
-        let maybe_services = self.discovery_handler.lock().unwrap().get_found_service(service);
+        let handler = self.discovery_handler.lock().unwrap();
+        let maybe_services = handler.get_found_service(service);
         if maybe_services.is_none()
         {
             return None;
         }
 
         let services = maybe_services.unwrap();
-        for service in &services
+        for service in services
         {
             match service
             {
@@ -80,14 +81,14 @@ impl ServiceDiscovery
         debug!("Didn't find an IPv6 address directly, checking SRV and PTR records.");
 
         // We didn't find an IPv6 address directly, check SRV and PTR records.
-        for service in &services
+        for service in services
         {
             match service
             {
                 DnsSdResponse::PtrAnswer(ptr_answer) =>
                 {
                     debug!("Found PTR answer: {}", ptr_answer.service);
-                    let maybe_services = self.discovery_handler.lock().unwrap().get_found_service(&ptr_answer.service);
+                    let maybe_services = handler.get_found_service(&ptr_answer.service);
                     if maybe_services.is_none()
                     {
                         continue;
@@ -120,7 +121,7 @@ impl ServiceDiscovery
                 },
                 DnsSdResponse::SrvAnswer(srv_answer) =>
                 {
-                    let maybe_services = self.discovery_handler.lock().unwrap().get_found_service(&srv_answer.service);
+                    let maybe_services = handler.get_found_service(&srv_answer.service);
                     if maybe_services.is_none()
                     {
                         continue;
@@ -150,6 +151,31 @@ impl ServiceDiscovery
                             _ => continue
                         }
                     }
+                },
+                _ => continue
+            }
+        }
+
+        return None;
+    }
+
+    pub fn get_txt_records(&self, service: &str) -> Option<Vec<String>>
+    {
+        let handler = self.discovery_handler.lock().unwrap();
+        let maybe_services = handler.get_found_service(service);
+        if maybe_services.is_none()
+        {
+            return None;
+        }
+
+        let services = maybe_services.unwrap();
+        for service in services
+        {
+            match service
+            {
+                DnsSdResponse::TxtAnswer(txt_answer) =>
+                {
+                    return Some(txt_answer.records.clone());
                 },
                 _ => continue
             }

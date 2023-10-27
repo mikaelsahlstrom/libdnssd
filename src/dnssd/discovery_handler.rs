@@ -35,9 +35,9 @@ impl DiscoveryHandler
         self.found_services.entry(service_label).or_insert(Vec::new()).push(service);
     }
 
-    pub fn get_found_service(&mut self, service: &str) -> Option<Vec<DnsSdResponse>>
+    pub fn get_found_service(&self, service: &str) -> Option<&Vec<DnsSdResponse>>
     {
-        return self.found_services.remove(service);
+        return self.found_services.get(service);
     }
 
     pub fn get_services(&self) -> &Vec<String>
