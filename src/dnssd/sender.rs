@@ -7,6 +7,8 @@ use crate::dnssd::socket::{ create_sender_socket, MULTICAST_ADDR_IPV6, MULTICAST
 use crate::dnssd::dns::{ new_query, DnsSdResponse };
 use crate::dnssd::discovery_handler::DiscoveryHandler;
 
+use super::socket;
+
 pub struct Sender
 {
     _send_thread: Option<thread::JoinHandle<Result<(), DnsSdError>>>,
@@ -18,7 +20,7 @@ impl Sender
     pub fn new(handler: Arc<Mutex<DiscoveryHandler>>) -> Result<Sender, DnsSdError>
     {
         let listen_handler = handler.clone();
-        let listen_socket = match create_sender_socket()
+        let listen_socket = match create_sender_socket(socket::IpType::V6)
         {
             Ok(socket) => socket,
             Err(err) =>

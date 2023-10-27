@@ -10,6 +10,12 @@ pub const MULTICAST_PORT: u16 = 5353;
 pub const MULTICAST_ADDR_IPV4: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 pub const MULTICAST_ADDR_IPV6: Ipv6Addr = Ipv6Addr::new(0xFF02, 0, 0, 0, 0, 0, 0, 0xFB);
 
+pub enum IpType
+{
+    V4,
+    V6
+}
+
 lazy_static!
 {
     pub(crate) static ref MULTICAST_IPV4_SOCKET: SocketAddr = SocketAddr::new(IpAddr::V4(MULTICAST_ADDR_IPV4), MULTICAST_PORT);
@@ -36,7 +42,7 @@ fn create_socket(addr: &SocketAddr) -> io::Result<Socket>
     Ok(socket)
 }
 
-fn get_default_ipv6_interface() -> u32
+fn get_default_interface() -> u32
 {
     let default_interface = match default_net::get_default_interface()
     {
@@ -60,7 +66,7 @@ pub fn join_multicast(addr: &SocketAddr) -> Result<UdpSocket, DnsSdError>
         },
         IpAddr::V6(ref mdns_v6) =>
         {
-            socket.join_multicast_v6(mdns_v6, get_default_ipv6_interface())?;
+            socket.join_multicast_v6(mdns_v6, get_default_interface())?;
             socket.set_only_v6(true)?;
         }
     };
@@ -97,17 +103,38 @@ fn bind_multicast(socket: Socket, addr: &SocketAddr) -> io::Result<Socket>
     Ok(socket)
 }
 
-pub fn create_sender_socket() -> Result<UdpSocket, DnsSdError>
+pub fn create_sender_socket(ip_type: IpType) -> Result<UdpSocket, DnsSdError>
+{
+    match ip_type
+    {
+        IpType::V4 => create_ipv4_sender_socker(),
+        IpType::V6 => create_ipv6_sender_socket()
+    }
+}
+
+fn create_ipv6_sender_socket() -> Result<UdpSocket, DnsSdError>
 {
     let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
 
     // Sometimes MacOS will send a query on the wrong interface, causing no route to host error.
     // Force default interface. Should not make a difference on other platforms.
     // TODO: Find out why this happens.
-    socket.set_multicast_if_v6(get_default_ipv6_interface())?;
+    socket.set_multicast_if_v6(get_default_interface())?;
 
     socket.bind(&SockAddr::from(SocketAddr::new(
         Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).into(),
+        0,
+    )))?;
+
+    Ok(socket.into())
+}
+
+fn create_ipv4_sender_socker() -> Result<UdpSocket, DnsSdError>
+{
+    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+
+    socket.bind(&SockAddr::from(SocketAddr::new(
+        Ipv4Addr::new(0, 0, 0, 0).into(),
         0,
     )))?;
 
