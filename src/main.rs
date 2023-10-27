@@ -44,6 +44,21 @@ fn main() {
 
         info!("Found service: {}:{}", ip_port.0, ip_port.1);
 
+        match service.get_txt_records(args.service.as_str())
+        {
+            Some(txt_records) =>
+            {
+                for txt_record in txt_records
+                {
+                    debug!("TXT Record: {}", txt_record);
+                }
+            },
+            None =>
+            {
+                debug!("No TXT records found.");
+                break;
+            }
+        }
         return;
     }
 }
