@@ -1,4 +1,4 @@
-use std::{sync::{ Arc, Mutex }, net::Ipv6Addr};
+use std::{sync::{ Arc, Mutex }, net::{IpAddr, Ipv4Addr, Ipv6Addr}};
 
 mod dnssd_error;
 mod dns;
@@ -14,27 +14,36 @@ use receiver::Receiver;
 use dns::DnsSdResponse;
 use log::debug;
 
+#[derive(Clone)]
+pub enum IpType
+{
+    V4,
+    V6
+}
+
 pub struct ServiceDiscovery
 {
     discovery_handler: Arc<Mutex<DiscoveryHandler>>,
     _receiver: Option<Receiver>,
-    _sender: Sender
+    _sender: Sender,
+    _ip_type: IpType
 }
 
 impl ServiceDiscovery
 {
-    pub fn new() -> Result<ServiceDiscovery, DnsSdError>
+    pub fn new(ip_type: IpType) -> Result<ServiceDiscovery, DnsSdError>
     {
         let discovery_handler: DiscoveryHandler = DiscoveryHandler::new();
         let handler = Arc::new(Mutex::new(discovery_handler));
         // let receiver = Receiver::new(handler.clone())?;
-        let sender = Sender::new(handler.clone())?;
+        let sender = Sender::new(handler.clone(), &ip_type)?;
 
         Ok(ServiceDiscovery
         {
             discovery_handler: handler,
             _receiver: None,
-            _sender: sender
+            _sender: sender,
+            _ip_type: ip_type
         })
     }
 
@@ -43,113 +52,56 @@ impl ServiceDiscovery
         self.discovery_handler.lock().unwrap().add_service(String::from(service));
     }
 
-    pub fn get_ipv6_and_port(&self, service: &str) -> Option<(Ipv6Addr, u16)>
+    pub fn get_ip_and_port(&self, service: &str) -> Option<(IpAddr, u16)>
     {
-        let mut response: (Ipv6Addr, u16) = (Ipv6Addr::UNSPECIFIED, 0);
         let handler = self.discovery_handler.lock().unwrap();
-        let maybe_services = handler.get_found_service(service);
-        if maybe_services.is_none()
+        let maybe_responses = handler.get_found_service(service);
+        if maybe_responses.is_none()
         {
             return None;
         }
 
-        let services = maybe_services.unwrap();
-        for service in services
+        let responses = maybe_responses.unwrap();
+        let ip = self.find_ip(&responses);
+        if ip.is_some()
         {
-            match service
-            {
-                DnsSdResponse::AaaaAnswer(aaaa_answer) =>
-                {
-                    response.0 = aaaa_answer.address;
-                    if response.1 != 0
-                    {
-                        return Some(response);
-                    }
-                },
-                DnsSdResponse::SrvAnswer(srv_answer) =>
-                {
-                    response.1 = srv_answer.port;
-                    if response.0 != Ipv6Addr::UNSPECIFIED
-                    {
-                        return Some(response);
-                    }
-                },
-                _ => continue
-            }
+            return Some((ip.unwrap(), self.find_port(&responses)));
         }
 
-        debug!("Didn't find an IPv6 address directly, checking SRV and PTR records.");
+        debug!("Didn't find an IP address directly, checking SRV and PTR records.");
 
-        // We didn't find an IPv6 address directly, check SRV and PTR records.
-        for service in services
+        for response in responses
         {
-            match service
+            match response
             {
                 DnsSdResponse::PtrAnswer(ptr_answer) =>
                 {
-                    debug!("Found PTR answer: {}", ptr_answer.service);
-                    let maybe_services = handler.get_found_service(&ptr_answer.service);
-                    if maybe_services.is_none()
+                    let maybe_responses = handler.get_found_service(&ptr_answer.service);
+                    if maybe_responses.is_none()
                     {
                         continue;
                     }
 
-                    let ptr_services = maybe_services.unwrap();
-                    for ptr_service in ptr_services
+                    let responses = maybe_responses.unwrap();
+                    let ip = self.find_ip(&responses);
+                    if ip.is_some()
                     {
-                        match ptr_service
-                        {
-                            DnsSdResponse::AaaaAnswer(aaaa_answer) =>
-                            {
-                                response.0 = aaaa_answer.address;
-                                if response.1 != 0
-                                {
-                                    return Some(response);
-                                }
-                            },
-                            DnsSdResponse::SrvAnswer(srv_answer) =>
-                            {
-                                response.1 = srv_answer.port;
-                                if response.0 != Ipv6Addr::UNSPECIFIED
-                                {
-                                    return Some(response);
-                                }
-                            },
-                            _ => continue
-                        }
+                        return Some((ip.unwrap(), self.find_port(&responses)));
                     }
                 },
                 DnsSdResponse::SrvAnswer(srv_answer) =>
                 {
-                    let maybe_services = handler.get_found_service(&srv_answer.service);
-                    if maybe_services.is_none()
+                    let maybe_responses = handler.get_found_service(&srv_answer.service);
+                    if maybe_responses.is_none()
                     {
                         continue;
                     }
 
-                    let srv_services = maybe_services.unwrap();
-                    for srv_service in srv_services
+                    let responses = maybe_responses.unwrap();
+                    let ip = self.find_ip(&responses);
+                    if ip.is_some()
                     {
-                        match srv_service
-                        {
-                            DnsSdResponse::AaaaAnswer(aaaa_answer) =>
-                            {
-                                response.0 = aaaa_answer.address;
-                                if response.1 != 0
-                                {
-                                    return Some(response);
-                                }
-                            },
-                            DnsSdResponse::SrvAnswer(srv_answer) =>
-                            {
-                                response.1 = srv_answer.port;
-                                if response.0 != Ipv6Addr::UNSPECIFIED
-                                {
-                                    return Some(response);
-                                }
-                            },
-                            _ => continue
-                        }
+                        return Some((ip.unwrap(), srv_answer.port));
                     }
                 },
                 _ => continue
@@ -182,5 +134,43 @@ impl ServiceDiscovery
         }
 
         return None;
+    }
+
+    fn find_ip(&self, responses: &Vec<DnsSdResponse>) -> Option<IpAddr>
+    {
+        for response in responses
+        {
+            match response
+            {
+                DnsSdResponse::AAnswer(a_answer) =>
+                {
+                    return Some(IpAddr::V4(a_answer.address));
+                },
+                DnsSdResponse::AaaaAnswer(aaaa_answer) =>
+                {
+                    return Some(IpAddr::V6(aaaa_answer.address));
+                },
+                _ => continue
+            }
+        }
+
+        return None;
+    }
+
+    fn find_port(&self, responses: &Vec<DnsSdResponse>) -> u16
+    {
+        for response in responses
+        {
+            match response
+            {
+                DnsSdResponse::SrvAnswer(srv_answer) =>
+                {
+                    return srv_answer.port;
+                },
+                _ => continue
+            }
+        }
+
+        return 0;
     }
 }

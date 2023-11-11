@@ -1,13 +1,13 @@
 use std::sync::{ Arc, Mutex };
 use std::thread;
+use default_net::ip;
 use log::debug;
 
 use crate::dnssd::dnssd_error::DnsSdError;
-use crate::dnssd::socket::{ create_sender_socket, MULTICAST_ADDR_IPV6, MULTICAST_PORT };
+use crate::dnssd::socket::{ create_sender_socket, MULTICAST_ADDR_IPV6, MULTICAST_ADDR_IPV4, MULTICAST_PORT };
 use crate::dnssd::dns::{ new_query, DnsSdResponse };
 use crate::dnssd::discovery_handler::DiscoveryHandler;
-
-use super::socket;
+use crate::dnssd::IpType;
 
 pub struct Sender
 {
@@ -17,10 +17,10 @@ pub struct Sender
 
 impl Sender
 {
-    pub fn new(handler: Arc<Mutex<DiscoveryHandler>>) -> Result<Sender, DnsSdError>
+    pub fn new(handler: Arc<Mutex<DiscoveryHandler>>, ip_type: &IpType) -> Result<Sender, DnsSdError>
     {
         let listen_handler = handler.clone();
-        let listen_socket = match create_sender_socket(socket::IpType::V6)
+        let listen_socket = match create_sender_socket(ip_type)
         {
             Ok(socket) => socket,
             Err(err) =>
@@ -138,7 +138,7 @@ impl Sender
                         DnsSdResponse::AAnswer(a) =>
                         {
                             if handler.lock().unwrap().is_service_wanted(&a.label) ||
-                                wanted_ptrs.contains(&&a.label)
+                                wanted_ptrs.contains(&a.label)
                             {
                                 handler.lock().unwrap().add_found_service(
                                     a.label.clone(),
@@ -155,7 +155,7 @@ impl Sender
                         DnsSdResponse::AaaaAnswer(aaa) =>
                         {
                             if handler.lock().unwrap().is_service_wanted(&aaa.label) ||
-                                wanted_ptrs.contains(&&aaa.label)
+                                wanted_ptrs.contains(&aaa.label)
                             {
                                 handler.lock().unwrap().add_found_service(
                                     aaa.label.clone(),
@@ -190,6 +190,8 @@ impl Sender
             }
         });
 
+        // TODO: Isn't there a better way to do this?
+        let new_ip_type = ip_type.clone();
         let send_thread = thread::spawn(move ||
         {
             loop
@@ -197,24 +199,40 @@ impl Sender
                 // For each service in handler, send a query.
                 for service in send_handler.lock().unwrap().get_services()
                 {
+                    debug!("Sending query for service: {}", service);
                     let query = new_query(service)?;
 
-                    // Send a query for the service.
-                    match send_socket.send_to(&query, (MULTICAST_ADDR_IPV6, MULTICAST_PORT))
+                    match new_ip_type
                     {
-                        Ok(_) => {},
-                        Err(err) =>
+                        IpType::V4 =>
                         {
-                            debug!("Failed to send query: {}", err);
-                            return Err(err.into());
+                            match send_socket.send_to(&query, (MULTICAST_ADDR_IPV4, MULTICAST_PORT))
+                            {
+                                Ok(_) => {},
+                                Err(err) =>
+                                {
+                                    debug!("Failed to send query: {}", err);
+                                    return Err(err.into());
+                                }
+                            }
+                        },
+                        IpType::V6 =>
+                        {
+                            match send_socket.send_to(&query, (MULTICAST_ADDR_IPV6, MULTICAST_PORT))
+                            {
+                                Ok(_) => {},
+                                Err(err) =>
+                                {
+                                    debug!("Failed to send query: {}", err);
+                                    return Err(err.into());
+                                }
+                            }
                         }
                     }
-
-                    debug!("Sent query for service: {}", service);
                 }
 
-                // Wait for 3 seconds.
-                thread::sleep(std::time::Duration::from_secs(3));
+                // Wait for 1 second.
+                thread::sleep(std::time::Duration::from_secs(1));
             }
         });
 

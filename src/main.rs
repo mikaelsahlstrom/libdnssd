@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate lazy_static;
 
+use std::net::Ipv6Addr;
+
 use clap::Parser;
 use log::{ info, error, debug };
 
@@ -18,7 +20,7 @@ fn main() {
     env_logger::init();
     let args = Args::parse();
 
-    let mut service = match dnssd::ServiceDiscovery::new()
+    let mut service = match dnssd::ServiceDiscovery::new(dnssd::IpType::V4)
     {
         Ok(service) => service,
         Err(err) =>
@@ -32,7 +34,7 @@ fn main() {
 
     loop
     {
-        let ip_port = match service.get_ipv6_and_port(args.service.as_str())
+        let ip_port = match service.get_ip_and_port(args.service.as_str())
         {
             Some(ip_port) => ip_port,
             None =>

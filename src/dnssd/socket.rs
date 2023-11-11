@@ -5,16 +5,11 @@ use socket2::{ Socket, Domain, Type, SockAddr, Protocol };
 use default_net;
 
 use super::dnssd_error::DnsSdError;
+use super::IpType;
 
 pub const MULTICAST_PORT: u16 = 5353;
 pub const MULTICAST_ADDR_IPV4: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 pub const MULTICAST_ADDR_IPV6: Ipv6Addr = Ipv6Addr::new(0xFF02, 0, 0, 0, 0, 0, 0, 0xFB);
-
-pub enum IpType
-{
-    V4,
-    V6
-}
 
 lazy_static!
 {
@@ -53,10 +48,15 @@ fn get_default_interface() -> u32
     default_interface
 }
 
-pub fn join_multicast(addr: &SocketAddr) -> Result<UdpSocket, DnsSdError>
+pub fn join_multicast(ip_type: &IpType) -> Result<UdpSocket, DnsSdError>
 {
+    let addr: SocketAddr = match ip_type
+    {
+        IpType::V4 => *MULTICAST_IPV4_SOCKET,
+        IpType::V6 => *MULTICAST_IPV6_SOCKET
+    };
     let ip_addr = addr.ip();
-    let socket = create_socket(addr)?;
+    let socket = create_socket(&addr)?;
 
     match ip_addr
     {
@@ -71,7 +71,7 @@ pub fn join_multicast(addr: &SocketAddr) -> Result<UdpSocket, DnsSdError>
         }
     };
 
-    let socket = bind_multicast(socket, addr)?;
+    let socket = bind_multicast(socket, &addr)?;
 
     Ok(socket.into())
 }
@@ -103,7 +103,7 @@ fn bind_multicast(socket: Socket, addr: &SocketAddr) -> io::Result<Socket>
     Ok(socket)
 }
 
-pub fn create_sender_socket(ip_type: IpType) -> Result<UdpSocket, DnsSdError>
+pub fn create_sender_socket(ip_type: &IpType) -> Result<UdpSocket, DnsSdError>
 {
     match ip_type
     {
