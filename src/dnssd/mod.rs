@@ -1,4 +1,4 @@
-use std::{sync::{ Arc, Mutex }, net::{IpAddr, Ipv4Addr, Ipv6Addr}};
+use std::{sync::{ Arc, Mutex }, net::IpAddr };
 
 mod dnssd_error;
 mod dns;

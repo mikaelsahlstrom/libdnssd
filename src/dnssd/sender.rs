@@ -1,6 +1,5 @@
 use std::sync::{ Arc, Mutex };
 use std::thread;
-use default_net::ip;
 use log::debug;
 
 use crate::dnssd::dnssd_error::DnsSdError;

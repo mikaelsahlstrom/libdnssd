@@ -1,8 +1,6 @@
 #[macro_use]
 extern crate lazy_static;
 
-use std::net::Ipv6Addr;
-
 use clap::Parser;
 use log::{ info, error, debug };
 
