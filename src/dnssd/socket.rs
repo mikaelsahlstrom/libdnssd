@@ -5,6 +5,7 @@ use socket2::{ Socket, Domain, Type, SockAddr, Protocol };
 use default_net;
 
 use super::dnssd_error::DnsSdError;
+use super::IpType;
 
 pub const MULTICAST_PORT: u16 = 5353;
 pub const MULTICAST_ADDR_IPV4: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
@@ -36,7 +37,7 @@ fn create_socket(addr: &SocketAddr) -> io::Result<Socket>
     Ok(socket)
 }
 
-fn get_default_ipv6_interface() -> u32
+fn get_default_interface() -> u32
 {
     let default_interface = match default_net::get_default_interface()
     {
@@ -47,10 +48,15 @@ fn get_default_ipv6_interface() -> u32
     default_interface
 }
 
-pub fn join_multicast(addr: &SocketAddr) -> Result<UdpSocket, DnsSdError>
+pub fn join_multicast(ip_type: &IpType) -> Result<UdpSocket, DnsSdError>
 {
+    let addr: SocketAddr = match ip_type
+    {
+        IpType::V4 => *MULTICAST_IPV4_SOCKET,
+        IpType::V6 => *MULTICAST_IPV6_SOCKET
+    };
     let ip_addr = addr.ip();
-    let socket = create_socket(addr)?;
+    let socket = create_socket(&addr)?;
 
     match ip_addr
     {
@@ -60,12 +66,12 @@ pub fn join_multicast(addr: &SocketAddr) -> Result<UdpSocket, DnsSdError>
         },
         IpAddr::V6(ref mdns_v6) =>
         {
-            socket.join_multicast_v6(mdns_v6, get_default_ipv6_interface())?;
+            socket.join_multicast_v6(mdns_v6, get_default_interface())?;
             socket.set_only_v6(true)?;
         }
     };
 
-    let socket = bind_multicast(socket, addr)?;
+    let socket = bind_multicast(socket, &addr)?;
 
     Ok(socket.into())
 }
@@ -97,17 +103,38 @@ fn bind_multicast(socket: Socket, addr: &SocketAddr) -> io::Result<Socket>
     Ok(socket)
 }
 
-pub fn create_sender_socket() -> Result<UdpSocket, DnsSdError>
+pub fn create_sender_socket(ip_type: &IpType) -> Result<UdpSocket, DnsSdError>
+{
+    match ip_type
+    {
+        IpType::V4 => create_ipv4_sender_socker(),
+        IpType::V6 => create_ipv6_sender_socket()
+    }
+}
+
+fn create_ipv6_sender_socket() -> Result<UdpSocket, DnsSdError>
 {
     let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
 
     // Sometimes MacOS will send a query on the wrong interface, causing no route to host error.
     // Force default interface. Should not make a difference on other platforms.
     // TODO: Find out why this happens.
-    socket.set_multicast_if_v6(get_default_ipv6_interface())?;
+    socket.set_multicast_if_v6(get_default_interface())?;
 
     socket.bind(&SockAddr::from(SocketAddr::new(
         Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0).into(),
+        0,
+    )))?;
+
+    Ok(socket.into())
+}
+
+fn create_ipv4_sender_socker() -> Result<UdpSocket, DnsSdError>
+{
+    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+
+    socket.bind(&SockAddr::from(SocketAddr::new(
+        Ipv4Addr::new(0, 0, 0, 0).into(),
         0,
     )))?;
 

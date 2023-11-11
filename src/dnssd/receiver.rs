@@ -6,6 +6,7 @@ use crate::dnssd::dnssd_error::DnsSdError;
 use crate::dnssd::dns::DnsSdResponse;
 use crate::dnssd::socket;
 use crate::dnssd::discovery_handler::DiscoveryHandler;
+use crate::dnssd::IpType;
 
 pub struct Receiver
 {
@@ -14,12 +15,19 @@ pub struct Receiver
 
 impl Receiver
 {
-    pub fn new(handler: Arc<Mutex<DiscoveryHandler>>) -> Result<Receiver, DnsSdError>
+    pub fn new(handler: Arc<Mutex<DiscoveryHandler>>, ip_type: &IpType) -> Result<Receiver, DnsSdError>
     {
+        let socket_ip_type = match ip_type
+        {
+            IpType::V4 => IpType::V4,
+            IpType::V6 => IpType::V6
+        };
+
         let thread = thread::spawn(move ||
         {
-            // Create a multicast IPv6 socket and listen.
-            let socket = socket::join_multicast(&socket::MULTICAST_IPV6_SOCKET)?;
+            // Create a multicast socket and listen.
+            let socket = socket::join_multicast(&socket_ip_type)?;
+
             let mut buffer: [u8; 4096] = [0u8; 4096];
 
             loop
