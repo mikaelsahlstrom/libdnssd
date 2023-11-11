@@ -7,7 +7,7 @@ authors = ["Mikael Sahlström <mick.sahlstrom@gmail.com>"]
 [dependencies]
 socket2 = { version = "0.5.5", features = ["all"] }
 lazy_static = "1.4.0"
-clap = { version = "4.4.7", features = ["derive"] }
-default-net = "0.18.0"
+clap = { version = "4.4.8", features = ["derive"] }
+default-net = "0.21.0"
 log = "0.4.20"
-env_logger = "0.10.0"
+env_logger = "0.10.1"
