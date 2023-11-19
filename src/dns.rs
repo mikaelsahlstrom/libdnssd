@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::net::{ Ipv4Addr, Ipv6Addr };
 
-use crate::dnssd::dnssd_error::DnsSdError;
+use crate::dnssd_error::DnsSdError;
 
 const FLAGS_QR_MASK: u16 = 0x8000;
 const FLAGS_QR_RESPONSE: u16 = 0x8000;

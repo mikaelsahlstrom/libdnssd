@@ -3,9 +3,10 @@ extern crate socket2;
 use std::{ net::{ IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket }, io };
 use socket2::{ Socket, Domain, Type, SockAddr, Protocol };
 use default_net;
+use lazy_static::lazy_static;
 
-use super::dnssd_error::DnsSdError;
-use super::IpType;
+use crate::dnssd_error::DnsSdError;
+use crate::IpType;
 
 pub const MULTICAST_PORT: u16 = 5353;
 pub const MULTICAST_ADDR_IPV4: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
