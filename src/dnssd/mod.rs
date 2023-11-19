@@ -5,12 +5,10 @@ mod dns;
 mod socket;
 mod discovery_handler;
 mod sender;
-mod receiver;
 
 use dnssd_error::DnsSdError;
 use discovery_handler::DiscoveryHandler;
 use sender::Sender;
-use receiver::Receiver;
 use dns::DnsSdResponse;
 
 #[derive(Clone)]
@@ -23,7 +21,6 @@ pub enum IpType
 pub struct ServiceDiscovery
 {
     discovery_handler: Arc<Mutex<DiscoveryHandler>>,
-    _receiver: Option<Receiver>,
     _sender: Sender,
     _ip_type: IpType
 }
@@ -34,13 +31,11 @@ impl ServiceDiscovery
     {
         let discovery_handler: DiscoveryHandler = DiscoveryHandler::new();
         let handler = Arc::new(Mutex::new(discovery_handler));
-        // let receiver = Receiver::new(handler.clone())?;
         let sender = Sender::new(handler.clone(), &ip_type)?;
 
         Ok(ServiceDiscovery
         {
             discovery_handler: handler,
-            _receiver: None,
             _sender: sender,
             _ip_type: ip_type
         })
