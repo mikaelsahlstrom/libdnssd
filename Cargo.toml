@@ -1,13 +1,16 @@
 [package]
 name = "libdnssd"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 authors = ["Mikael Sahlström <mick.sahlstrom@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/mikaelsahlstrom/libdnssd"
 
 [dependencies]
 socket2 = { version = "0.5.5", features = ["all"] }
 lazy_static = "1.4.0"
-clap = { version = "4.4.8", features = ["derive"] }
 default-net = "0.21.0"
 log = "0.4.20"
+
+[dev-dependencies]
 env_logger = "0.10.1"
