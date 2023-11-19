@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::{ Arc, Mutex };
 use std::thread;
 use log::debug;
@@ -69,7 +70,7 @@ impl Sender
                 debug!("Parsed response:\n{:?}", responses);
 
                 // Start by finding all PTR and SRV answers that are wanted.
-                let mut wanted_ptrs: Vec<String> = Vec::new();
+                let mut reverse_lookup: HashMap<String, String> = HashMap::new();
                 for response in responses.iter()
                 {
                     match response
@@ -78,52 +79,58 @@ impl Sender
                         {
                             if handler.lock().unwrap().is_service_wanted(&ptr.label)
                             {
-                                wanted_ptrs.push(ptr.service.clone());
+                                if ptr.service != ptr.label
+                                {
+                                    reverse_lookup.insert(ptr.service.clone(), ptr.label.clone());
+                                }
                             }
                         },
                         DnsSdResponse::SrvAnswer(srv) =>
                         {
                             if handler.lock().unwrap().is_service_wanted(&srv.label)
                             {
-                                wanted_ptrs.push(srv.service.clone());
+                                if srv.service != srv.label
+                                {
+                                    reverse_lookup.insert(srv.service.clone(), srv.label.clone());
+                                }
                             }
                         },
-                        _ => {
+                        _ =>
+                        {
                             // Ignore other responses for now.
                         }
                     }
                 }
 
-                // Then find all other answers that are wanted or in wanted ptrs.
+                let mut service_to_remove: Option<String> = None;
+
+                // Then find all other answers that are wanted or in reverse_lookup.
                 for response in responses.into_iter()
                 {
                     match response
                     {
-                        DnsSdResponse::SrvAnswer(srv) =>
+                        DnsSdResponse::TxtAnswer(txt) =>
                         {
-                            if handler.lock().unwrap().is_service_wanted(&srv.label) ||
-                                wanted_ptrs.contains(&&srv.label)
+                            if handler.lock().unwrap().is_service_wanted(&txt.label)
                             {
+                                // Also schedule it for removal.
+                                service_to_remove = Some(txt.label.clone());
+
                                 handler.lock().unwrap().add_found_service(
-                                    srv.label.clone(),
-                                    DnsSdResponse::SrvAnswer(
-                                        crate::dnssd::dns::SrvAnswer
+                                    txt.label.clone(),
+                                    DnsSdResponse::TxtAnswer(
+                                        crate::dnssd::dns::TxtAnswer
                                         {
-                                            label: srv.label,
-                                            service: srv.service,
-                                            port: srv.port
+                                            label: txt.label,
+                                            records: txt.records
                                         }
                                     )
                                 );
                             }
-                        },
-                        DnsSdResponse::TxtAnswer(txt) =>
-                        {
-                            if handler.lock().unwrap().is_service_wanted(&txt.label) ||
-                                wanted_ptrs.contains(&&txt.label)
+                            else if reverse_lookup.contains_key(&txt.label)
                             {
                                 handler.lock().unwrap().add_found_service(
-                                    txt.label.clone(),
+                                    reverse_lookup.get(&txt.label).unwrap().to_string(),
                                     DnsSdResponse::TxtAnswer(
                                         crate::dnssd::dns::TxtAnswer
                                         {
@@ -136,11 +143,26 @@ impl Sender
                         },
                         DnsSdResponse::AAnswer(a) =>
                         {
-                            if handler.lock().unwrap().is_service_wanted(&a.label) ||
-                                wanted_ptrs.contains(&a.label)
+                            if handler.lock().unwrap().is_service_wanted(&a.label)
                             {
+                                // Also schedule it for removal.
+                                service_to_remove = Some(a.label.clone());
+
                                 handler.lock().unwrap().add_found_service(
                                     a.label.clone(),
+                                    DnsSdResponse::AAnswer(
+                                        crate::dnssd::dns::AAnswer
+                                        {
+                                            label: a.label,
+                                            address: a.address
+                                        }
+                                    )
+                                );
+                            }
+                            else if reverse_lookup.contains_key(&a.label)
+                            {
+                                handler.lock().unwrap().add_found_service(
+                                    reverse_lookup.get(&a.label).unwrap().to_string(),
                                     DnsSdResponse::AAnswer(
                                         crate::dnssd::dns::AAnswer
                                         {
@@ -153,11 +175,26 @@ impl Sender
                         },
                         DnsSdResponse::AaaaAnswer(aaa) =>
                         {
-                            if handler.lock().unwrap().is_service_wanted(&aaa.label) ||
-                                wanted_ptrs.contains(&aaa.label)
+                            if handler.lock().unwrap().is_service_wanted(&aaa.label)
                             {
+                                // Also schedule it for removal.
+                                service_to_remove = Some(aaa.label.clone());
+
                                 handler.lock().unwrap().add_found_service(
                                     aaa.label.clone(),
+                                    DnsSdResponse::AaaaAnswer(
+                                        crate::dnssd::dns::AaaaAnswer
+                                        {
+                                            label: aaa.label,
+                                            address: aaa.address
+                                        }
+                                    )
+                                );
+                            }
+                            else if reverse_lookup.contains_key(&aaa.label)
+                            {
+                                handler.lock().unwrap().add_found_service(
+                                    reverse_lookup.get(&aaa.label).unwrap().to_string(),
                                     DnsSdResponse::AaaaAnswer(
                                         crate::dnssd::dns::AaaaAnswer
                                         {
@@ -172,6 +209,9 @@ impl Sender
                         {
                             if handler.lock().unwrap().is_service_wanted(&ptr.label)
                             {
+                                // Also schedule it for removal.
+                                service_to_remove = Some(ptr.label.clone());
+
                                 handler.lock().unwrap().add_found_service(
                                     ptr.label.clone(),
                                     DnsSdResponse::PtrAnswer(
@@ -183,13 +223,64 @@ impl Sender
                                     )
                                 );
                             }
-                        }
+                            else if reverse_lookup.contains_key(&ptr.label)
+                            {
+                                handler.lock().unwrap().add_found_service(
+                                    reverse_lookup.get(&ptr.label).unwrap().to_string(),
+                                    DnsSdResponse::PtrAnswer(
+                                        crate::dnssd::dns::PtrAnswer
+                                        {
+                                            label: ptr.label,
+                                            service: ptr.service
+                                        }
+                                    )
+                                );
+                            }
+                        },
+                        DnsSdResponse::SrvAnswer(srv) =>
+                        {
+                            if handler.lock().unwrap().is_service_wanted(&srv.label)
+                            {
+                                // Also schedule it for removal.
+                                service_to_remove = Some(srv.label.clone());
+
+                                handler.lock().unwrap().add_found_service(
+                                    srv.label.clone(),
+                                    DnsSdResponse::SrvAnswer(
+                                        crate::dnssd::dns::SrvAnswer
+                                        {
+                                            label: srv.label,
+                                            service: srv.service,
+                                            port: srv.port
+                                        }
+                                    )
+                                );
+                            }
+                            else if reverse_lookup.contains_key(&srv.label)
+                            {
+                                handler.lock().unwrap().add_found_service(
+                                    reverse_lookup.get(&srv.label).unwrap().to_string(),
+                                    DnsSdResponse::SrvAnswer(
+                                        crate::dnssd::dns::SrvAnswer
+                                        {
+                                            label: srv.label,
+                                            service: srv.service,
+                                            port: srv.port
+                                        }
+                                    )
+                                );
+                            }
+                        },
                     }
+                }
+
+                if service_to_remove.is_some()
+                {
+                    handler.lock().unwrap().remove_service(service_to_remove.unwrap());
                 }
             }
         });
 
-        // TODO: Isn't there a better way to do this?
         let new_ip_type = ip_type.clone();
         let send_thread = thread::spawn(move ||
         {
