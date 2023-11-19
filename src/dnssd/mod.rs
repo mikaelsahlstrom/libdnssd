@@ -12,7 +12,6 @@ use discovery_handler::DiscoveryHandler;
 use sender::Sender;
 use receiver::Receiver;
 use dns::DnsSdResponse;
-use log::debug;
 
 #[derive(Clone)]
 pub enum IpType

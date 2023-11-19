@@ -16,7 +16,7 @@ impl DiscoveryHandler
         DiscoveryHandler
         {
             services: Vec::new(),
-            found_services: HashMap::new(),
+            found_services: HashMap::new()
         }
     }
 
