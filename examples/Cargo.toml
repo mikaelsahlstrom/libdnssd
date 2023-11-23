@@ -1,0 +1,12 @@
+[package]
+name = "libdnssd_examples"
+version = "1.0.0"
+edition = "2021"
+authors = ["Mikael Sahlström <mick.sahlstrom@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/mikaelsahlstrom/libdnssd"
+
+[dependencies]
+libdnssd = { path = "../" }
+log = "0.4.20"
+env_logger = "0.10.1"
