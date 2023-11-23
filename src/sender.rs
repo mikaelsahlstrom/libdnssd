@@ -3,11 +3,11 @@ use std::sync::{ Arc, Mutex };
 use std::thread;
 use log::debug;
 
-use crate::dnssd::dnssd_error::DnsSdError;
-use crate::dnssd::socket::{ create_sender_socket, MULTICAST_ADDR_IPV6, MULTICAST_ADDR_IPV4, MULTICAST_PORT };
-use crate::dnssd::dns::{ new_query, DnsSdResponse };
-use crate::dnssd::discovery_handler::DiscoveryHandler;
-use crate::dnssd::IpType;
+use crate::dnssd_error::DnsSdError;
+use crate::socket::{ create_sender_socket, MULTICAST_ADDR_IPV6, MULTICAST_ADDR_IPV4, MULTICAST_PORT };
+use crate::dns::{ new_query, DnsSdResponse, TxtAnswer, SrvAnswer, AAnswer, AaaaAnswer, PtrAnswer };
+use crate::discovery_handler::DiscoveryHandler;
+use crate::IpType;
 
 pub struct Sender
 {
@@ -119,7 +119,7 @@ impl Sender
                                 handler.lock().unwrap().add_found_service(
                                     txt.label.clone(),
                                     DnsSdResponse::TxtAnswer(
-                                        crate::dnssd::dns::TxtAnswer
+                                        TxtAnswer
                                         {
                                             label: txt.label,
                                             records: txt.records
@@ -132,7 +132,7 @@ impl Sender
                                 handler.lock().unwrap().add_found_service(
                                     reverse_lookup.get(&txt.label).unwrap().to_string(),
                                     DnsSdResponse::TxtAnswer(
-                                        crate::dnssd::dns::TxtAnswer
+                                        TxtAnswer
                                         {
                                             label: txt.label,
                                             records: txt.records
@@ -151,7 +151,7 @@ impl Sender
                                 handler.lock().unwrap().add_found_service(
                                     a.label.clone(),
                                     DnsSdResponse::AAnswer(
-                                        crate::dnssd::dns::AAnswer
+                                        AAnswer
                                         {
                                             label: a.label,
                                             address: a.address
@@ -164,7 +164,7 @@ impl Sender
                                 handler.lock().unwrap().add_found_service(
                                     reverse_lookup.get(&a.label).unwrap().to_string(),
                                     DnsSdResponse::AAnswer(
-                                        crate::dnssd::dns::AAnswer
+                                        AAnswer
                                         {
                                             label: a.label,
                                             address: a.address
@@ -183,7 +183,7 @@ impl Sender
                                 handler.lock().unwrap().add_found_service(
                                     aaa.label.clone(),
                                     DnsSdResponse::AaaaAnswer(
-                                        crate::dnssd::dns::AaaaAnswer
+                                        AaaaAnswer
                                         {
                                             label: aaa.label,
                                             address: aaa.address
@@ -196,7 +196,7 @@ impl Sender
                                 handler.lock().unwrap().add_found_service(
                                     reverse_lookup.get(&aaa.label).unwrap().to_string(),
                                     DnsSdResponse::AaaaAnswer(
-                                        crate::dnssd::dns::AaaaAnswer
+                                        AaaaAnswer
                                         {
                                             label: aaa.label,
                                             address: aaa.address
@@ -215,7 +215,7 @@ impl Sender
                                 handler.lock().unwrap().add_found_service(
                                     ptr.label.clone(),
                                     DnsSdResponse::PtrAnswer(
-                                        crate::dnssd::dns::PtrAnswer
+                                        PtrAnswer
                                         {
                                             label: ptr.label,
                                             service: ptr.service
@@ -228,7 +228,7 @@ impl Sender
                                 handler.lock().unwrap().add_found_service(
                                     reverse_lookup.get(&ptr.label).unwrap().to_string(),
                                     DnsSdResponse::PtrAnswer(
-                                        crate::dnssd::dns::PtrAnswer
+                                        PtrAnswer
                                         {
                                             label: ptr.label,
                                             service: ptr.service
@@ -247,7 +247,7 @@ impl Sender
                                 handler.lock().unwrap().add_found_service(
                                     srv.label.clone(),
                                     DnsSdResponse::SrvAnswer(
-                                        crate::dnssd::dns::SrvAnswer
+                                        SrvAnswer
                                         {
                                             label: srv.label,
                                             service: srv.service,
@@ -261,7 +261,7 @@ impl Sender
                                 handler.lock().unwrap().add_found_service(
                                     reverse_lookup.get(&srv.label).unwrap().to_string(),
                                     DnsSdResponse::SrvAnswer(
-                                        crate::dnssd::dns::SrvAnswer
+                                        SrvAnswer
                                         {
                                             label: srv.label,
                                             service: srv.service,

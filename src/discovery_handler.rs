@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use log::debug;
 
-use crate::dnssd::dns::DnsSdResponse;
+use crate::dns::DnsSdResponse;
 
 pub struct DiscoveryHandler
 {
