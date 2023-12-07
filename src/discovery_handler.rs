@@ -55,7 +55,11 @@ impl DiscoveryHandler
     pub fn remove_service(&mut self, service_label: String)
     {
         debug!("Removing service: {}", service_label);
-        self.services.remove(self.services.iter().position(|x| *x == service_label).unwrap());
+        let position = self.services.iter().position(|x| *x == service_label);
+        if let Some(position) = position
+        {
+            self.services.remove(position);
+        }
     }
 
     pub fn get_found_services(&self, service: &str) -> Option<&Vec<TimeStampedResponse>>

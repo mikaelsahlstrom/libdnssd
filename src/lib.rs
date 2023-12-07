@@ -21,8 +21,8 @@ pub enum IpType
 pub struct ServiceDiscovery
 {
     discovery_handler: Arc<Mutex<DiscoveryHandler>>,
-    _sender: Sender,
-    _ip_type: IpType
+    ip_type: IpType,
+    _sender: Sender
 }
 
 impl ServiceDiscovery
@@ -36,8 +36,8 @@ impl ServiceDiscovery
         Ok(ServiceDiscovery
         {
             discovery_handler: handler,
-            _sender: sender,
-            _ip_type: ip_type
+            ip_type: ip_type,
+            _sender: sender
         })
     }
 
@@ -64,10 +64,22 @@ impl ServiceDiscovery
                 {
                     DnsSdResponse::AAnswer(a_answer) =>
                     {
+                        match self.ip_type
+                        {
+                            IpType::V6 => continue,
+                            _ => ()
+                        }
+
                         return Some(IpAddr::V4(a_answer.address));
                     },
                     DnsSdResponse::AaaaAnswer(aaaa_answer) =>
                     {
+                        match self.ip_type
+                        {
+                            IpType::V4 => continue,
+                            _ => ()
+                        }
+
                         return Some(IpAddr::V6(aaaa_answer.address));
                     }
                     _ =>
@@ -158,5 +170,10 @@ impl ServiceDiscovery
         }
 
         return None;
+    }
+
+    pub fn stop_find_service(&mut self, service: &str)
+    {
+        self.discovery_handler.lock().unwrap().remove_service(String::from(service));
     }
 }

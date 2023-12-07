@@ -4,7 +4,7 @@ use libdnssd::{ ServiceDiscovery, IpType };
 fn main() {
     env_logger::init();
 
-    //find_ipv4_service("DIRIGERA._hap._tcp.local");
+    find_ipv4_service("_matterc._udp.local");
     find_ipv6_service("_matterc._udp.local");
 }
 
@@ -31,6 +31,7 @@ fn find_ipv4_service(service: &str)
             Some(ip_port) =>
             {
                 info!("Found service: {}:{}", ip_port.0, ip_port.1);
+                service_discovery.stop_find_service(service);
             },
             None =>
             {
@@ -81,6 +82,7 @@ fn find_ipv6_service(service: &str)
             Some(ip_port) =>
             {
                 info!("Found service: {}:{}", ip_port.0, ip_port.1);
+                service_discovery.stop_find_service(service);
             }
             None =>
             {
