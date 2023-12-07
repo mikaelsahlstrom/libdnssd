@@ -6,7 +6,7 @@ use crate::dns::DnsSdResponse;
 pub struct DiscoveryHandler
 {
     services: Vec<String>,
-    found_services: HashMap<String, Vec<DnsSdResponse>>
+    found_services: HashMap<String, Vec<Vec<DnsSdResponse>>>
 }
 
 impl DiscoveryHandler
@@ -26,15 +26,11 @@ impl DiscoveryHandler
         self.services.push(service);
     }
 
-    pub fn is_service_wanted(&self, service: &String) -> bool
-    {
-        return self.services.contains(service);
-    }
-
-    pub fn add_found_service(&mut self, service_label: String, service: DnsSdResponse)
+    pub fn add_response(&mut self, service_label: String, services: Vec<DnsSdResponse>)
     {
         debug!("Adding found service: {}", service_label);
-        self.found_services.entry(service_label).or_insert(Vec::new()).push(service);
+        self.found_services.entry(service_label).or_insert(Vec::new());
+        self.found_services.get(&service_label).unwrap().push(services);
     }
 
     pub fn remove_service(&mut self, service_label: String)
@@ -43,7 +39,7 @@ impl DiscoveryHandler
         self.services.remove(self.services.iter().position(|x| *x == service_label).unwrap());
     }
 
-    pub fn get_found_service(&self, service: &str) -> Option<&Vec<DnsSdResponse>>
+    pub fn get_found_services(&self, service: &str) -> Option<&Vec<Vec<DnsSdResponse>>>
     {
         return self.found_services.get(service);
     }

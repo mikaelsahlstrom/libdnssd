@@ -49,7 +49,7 @@ impl ServiceDiscovery
     pub fn get_ip_address(&self, service: &str) -> Option<IpAddr>
     {
         let handler = self.discovery_handler.lock().unwrap();
-        let maybe_services = handler.get_found_service(service);
+        let maybe_services = handler.get_found_services(service);
         if maybe_services.is_none()
         {
             return None;

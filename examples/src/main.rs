@@ -4,8 +4,8 @@ use libdnssd::{ ServiceDiscovery, IpType };
 fn main() {
     env_logger::init();
 
-    find_ipv4_service("DIRIGERA._hap._tcp.local");
-    find_ipv6_service("DIRIGERA._hap._tcp.local");
+    //find_ipv4_service("DIRIGERA._hap._tcp.local");
+    find_ipv6_service("_matterc._udp.local");
 }
 
 fn find_ipv4_service(service: &str)
