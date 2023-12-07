@@ -1,11 +1,10 @@
-use std::collections::HashMap;
 use std::sync::{ Arc, Mutex };
 use std::thread;
 use log::debug;
 
 use crate::dnssd_error::DnsSdError;
 use crate::socket::{ create_sender_socket, MULTICAST_ADDR_IPV6, MULTICAST_ADDR_IPV4, MULTICAST_PORT };
-use crate::dns::{ new_query, DnsSdResponse, TxtAnswer, SrvAnswer, AAnswer, AaaaAnswer, PtrAnswer };
+use crate::dns::{ new_query, DnsSdResponse };
 use crate::discovery_handler::DiscoveryHandler;
 use crate::IpType;
 
