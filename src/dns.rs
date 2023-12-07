@@ -125,7 +125,7 @@ impl DnsSdHeader
 
 impl DnsSdResponse
 {
-    pub fn from(buffer: &[u8], count: usize) -> Result<Vec<DnsSdResponse>, DnsSdError>
+    pub fn from(buffer: &[u8], count: usize) -> Result<(String, Vec<DnsSdResponse>), DnsSdError>
     {
         let mut responses: Vec<DnsSdResponse> = Vec::new();
 
@@ -143,13 +143,20 @@ impl DnsSdResponse
 
         let mut offset: usize = 12;
 
-        // Parse queries to get correct start offset for answers.
+        // Parse queries to get correct start offset for answers and to get label.
+        let mut answer_label: Option<String> = None;
         for _ in 0..header.queries_len
         {
             // Parse question label.
-            let (_, label_end) = DnsSdResponse::label_to_string(buffer, offset)?;
-            offset = label_end;
+            let query_label = DnsSdResponse::label_to_string(buffer, offset)?;
+            answer_label = Some(query_label.0);
+            offset = query_label.1;
             offset += 4;
+        }
+
+        if answer_label.is_none()
+        {
+            return Err(DnsSdError::InvalidDnsSdResponse);
         }
 
         for _ in 0..header.answers_len
@@ -162,7 +169,7 @@ impl DnsSdResponse
             offset = DnsSdResponse::parse_record(buffer, offset, &mut responses)?;
         }
 
-        return Ok(responses);
+        return Ok((answer_label.unwrap(), responses));
     }
 
     fn parse_record(buffer: &[u8], mut offset: usize, responses: &mut Vec<DnsSdResponse>) -> Result<usize, DnsSdError>
@@ -616,7 +623,7 @@ mod tests
                                   0x31, 0x05, 0x73, 0x23, 0x3d, 0x34, 0x37, 0x04, 0x73, 0x66, 0x3d, 0x30, 0x04, 0x63, 0x69, 0x3d,
                                   0x32, 0x0b, 0x73, 0x68, 0x3d, 0x6b, 0x37, 0x50, 0x76, 0x43, 0x67, 0x3d, 0x3d ];
 
-        let responses = DnsSdResponse::from(&packet, 221).unwrap();
+        let (label, responses) = DnsSdResponse::from(&packet, 221).unwrap();
 
         assert_eq!(responses.len(), 3);
         let mut matches = 0;

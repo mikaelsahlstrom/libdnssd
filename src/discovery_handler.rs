@@ -1,12 +1,31 @@
 use std::collections::HashMap;
+use std::time::SystemTime;
 use log::debug;
 
 use crate::dns::DnsSdResponse;
 
+pub struct TimeStampedResponse
+{
+    pub timestamp: SystemTime,
+    pub responses: Vec<DnsSdResponse>,
+}
+
+impl TimeStampedResponse
+{
+    pub fn new(responses: Vec<DnsSdResponse>) -> TimeStampedResponse
+    {
+        TimeStampedResponse
+        {
+            timestamp: SystemTime::now(),
+            responses,
+        }
+    }
+}
+
 pub struct DiscoveryHandler
 {
     services: Vec<String>,
-    found_services: HashMap<String, Vec<DnsSdResponse>>
+    found_services: HashMap<String, Vec<TimeStampedResponse>>
 }
 
 impl DiscoveryHandler
@@ -26,24 +45,24 @@ impl DiscoveryHandler
         self.services.push(service);
     }
 
-    pub fn is_service_wanted(&self, service: &String) -> bool
-    {
-        return self.services.contains(service);
-    }
-
-    pub fn add_found_service(&mut self, service_label: String, service: DnsSdResponse)
+    pub fn add_response(&mut self, service_label: String, services: Vec<DnsSdResponse>)
     {
         debug!("Adding found service: {}", service_label);
-        self.found_services.entry(service_label).or_insert(Vec::new()).push(service);
+        let entry = self.found_services.entry(service_label).or_insert(Vec::new());
+        entry.push(TimeStampedResponse::new(services));
     }
 
     pub fn remove_service(&mut self, service_label: String)
     {
         debug!("Removing service: {}", service_label);
-        self.services.remove(self.services.iter().position(|x| *x == service_label).unwrap());
+        let position = self.services.iter().position(|x| *x == service_label);
+        if let Some(position) = position
+        {
+            self.services.remove(position);
+        }
     }
 
-    pub fn get_found_service(&self, service: &str) -> Option<&Vec<DnsSdResponse>>
+    pub fn get_found_services(&self, service: &str) -> Option<&Vec<TimeStampedResponse>>
     {
         return self.found_services.get(service);
     }

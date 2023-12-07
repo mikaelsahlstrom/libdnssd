@@ -21,8 +21,8 @@ pub enum IpType
 pub struct ServiceDiscovery
 {
     discovery_handler: Arc<Mutex<DiscoveryHandler>>,
-    _sender: Sender,
-    _ip_type: IpType
+    ip_type: IpType,
+    _sender: Sender
 }
 
 impl ServiceDiscovery
@@ -36,8 +36,8 @@ impl ServiceDiscovery
         Ok(ServiceDiscovery
         {
             discovery_handler: handler,
-            _sender: sender,
-            _ip_type: ip_type
+            ip_type: ip_type,
+            _sender: sender
         })
     }
 
@@ -49,26 +49,44 @@ impl ServiceDiscovery
     pub fn get_ip_address(&self, service: &str) -> Option<IpAddr>
     {
         let handler = self.discovery_handler.lock().unwrap();
-        let maybe_services = handler.get_found_service(service);
+        let maybe_services = handler.get_found_services(service);
         if maybe_services.is_none()
         {
             return None;
         }
 
-        let services = maybe_services.unwrap();
-        for service in services
+        let timed_services = maybe_services.unwrap();
+        if let Some(timed_service) = timed_services.last()
         {
-            match service
+            for service in &timed_service.responses
             {
-                DnsSdResponse::AAnswer(a_answer) =>
+                match service
                 {
-                    return Some(IpAddr::V4(a_answer.address));
-                },
-                DnsSdResponse::AaaaAnswer(aaaa_answer) =>
-                {
-                    return Some(IpAddr::V6(aaaa_answer.address));
+                    DnsSdResponse::AAnswer(a_answer) =>
+                    {
+                        match self.ip_type
+                        {
+                            IpType::V6 => continue,
+                            _ => ()
+                        }
+
+                        return Some(IpAddr::V4(a_answer.address));
+                    },
+                    DnsSdResponse::AaaaAnswer(aaaa_answer) =>
+                    {
+                        match self.ip_type
+                        {
+                            IpType::V4 => continue,
+                            _ => ()
+                        }
+
+                        return Some(IpAddr::V6(aaaa_answer.address));
+                    }
+                    _ =>
+                    {
+                        continue
+                    }
                 }
-                _ => continue
             }
         }
 
@@ -78,22 +96,28 @@ impl ServiceDiscovery
     pub fn get_port(&self, service: &str) -> Option<u16>
     {
         let handler = self.discovery_handler.lock().unwrap();
-        let maybe_services = handler.get_found_service(service);
+        let maybe_services = handler.get_found_services(service);
         if maybe_services.is_none()
         {
             return None;
         }
 
-        let services = maybe_services.unwrap();
-        for service in services
+        let timed_services = maybe_services.unwrap();
+        if let Some(timed_service) = timed_services.last()
         {
-            match service
+            for service in &timed_service.responses
             {
-                DnsSdResponse::SrvAnswer(srv_answer) =>
+                match service
                 {
-                    return Some(srv_answer.port);
-                },
-                _ => continue
+                    DnsSdResponse::SrvAnswer(srv_answer) =>
+                    {
+                        return Some(srv_answer.port);
+                    },
+                    _ =>
+                    {
+                        continue
+                    }
+                }
             }
         }
 
@@ -120,25 +144,36 @@ impl ServiceDiscovery
     pub fn get_txt_records(&self, service: &str) -> Option<Vec<String>>
     {
         let handler = self.discovery_handler.lock().unwrap();
-        let maybe_services = handler.get_found_service(service);
+        let maybe_services = handler.get_found_services(service);
         if maybe_services.is_none()
         {
             return None;
         }
 
-        let services = maybe_services.unwrap();
-        for service in services
+        let timed_services = maybe_services.unwrap();
+        if let Some(time_service) = timed_services.last()
         {
-            match service
+            for service in &time_service.responses
             {
-                DnsSdResponse::TxtAnswer(txt_answer) =>
+                match service
                 {
-                    return Some(txt_answer.records.clone());
-                },
-                _ => continue
+                    DnsSdResponse::TxtAnswer(txt_answer) =>
+                    {
+                        return Some(txt_answer.records.clone());
+                    },
+                    _ =>
+                    {
+                        continue
+                    }
+                }
             }
         }
 
         return None;
+    }
+
+    pub fn stop_find_service(&mut self, service: &str)
+    {
+        self.discovery_handler.lock().unwrap().remove_service(String::from(service));
     }
 }
